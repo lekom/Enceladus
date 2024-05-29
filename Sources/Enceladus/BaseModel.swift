@@ -3,7 +3,7 @@ import Combine
 import Foundation
 import SwiftData
 
-protocol BaseModel: Identifiable, Codable, PersistentModel {
+protocol BaseModel: Equatable, Identifiable, Codable, PersistentModel {
     
     @Attribute(.unique)
     var id: String { get }
@@ -20,8 +20,8 @@ protocol BaseModel: Identifiable, Codable, PersistentModel {
     /// The interval at which the model should be cached (seconds)
     static var cacheDuration: TimeInterval { get }
     
-    /// A map of KeyPaths to CodingKeys string value
-    static var keyPathMap: [AnyKeyPath: StringConvertible] { get }
+    /// A map of KeyPaths to the remote queryable key value
+    static var remoteQueryableKeys: [AnyKeyPath: StringConvertible] { get }
     
     /// Explicit equality
     static func isEqual(lhs: Self, rhs: Self) -> Bool
@@ -38,4 +38,7 @@ protocol ListModel: BaseModel {
     
     /// The endpoint to fetch a list of models from the server.
     static var list: Endpoint { get }
+    
+    /// The index of the model in the list.
+    var index: Int { get set }
 }

@@ -13,6 +13,8 @@ import SwiftData
 
 @Model
 final class ShortPollIntervalTestModel: Codable, ListModel, Equatable {
+   
+    var index: Int = 0
         
     @Attribute(.unique)
     let id: String
@@ -46,7 +48,7 @@ final class ShortPollIntervalTestModel: Codable, ListModel, Equatable {
     
     static var cacheDuration: TimeInterval { 120 }
     
-    static var keyPathMap: [AnyKeyPath : StringConvertible] {
+    static var remoteQueryableKeys: [AnyKeyPath : StringConvertible] {
         [\TestModel.id : CodingKeys.id]
     }
     

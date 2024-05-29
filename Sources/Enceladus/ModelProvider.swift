@@ -13,7 +13,7 @@ protocol ModelProviding {
     
     func streamModel<T: BaseModel>(type: T.Type, id: String) -> AnyPublisher<ModelQueryResult<T>, Never>
     
-    func streamCollection<T: BaseModel>(type: T.Type, query: ModelQuery<T>?) -> AnyPublisher<ListModelQueryResult<T>, Never>
+    func streamCollection<T: BaseModel>(type: T.Type, query: ListModelQuery<T>?) -> AnyPublisher<ListModelQueryResult<T>, Never>
 }
 
 class ModelProvider: ModelProviding {
@@ -33,12 +33,12 @@ class ModelProvider: ModelProviding {
     }
     
     func streamModel<T: BaseModel>(type: T.Type, id: String) -> AnyPublisher<ModelQueryResult<T>, Never> {
-        let key = StreamKey<T>(
+        let key = ModelStreamKey<T>(
             model: ModelWrapper(type),
-            isList: false,
             query: ModelQuery(
-                urlQueryItems: [URLQueryItem(name: "id", value: id)],
-                predicate: .equatable("\(String(reflecting: T.self))-id-\(id)", #Predicate { $0.id == id })
+                queryItems: [
+                    EqualQueryItem(keyPath: \.id, value: id)
+                ]
             )
         )
         
@@ -81,10 +81,9 @@ class ModelProvider: ModelProviding {
             .eraseToAnyPublisher()
     }
     
-    func streamCollection<T: BaseModel>(type: T.Type, query: ModelQuery<T>? = nil) -> AnyPublisher<ListModelQueryResult<T>, Never> {
-        let key = StreamKey(
+    func streamCollection<T: BaseModel>(type: T.Type, query: ListModelQuery<T>? = nil) -> AnyPublisher<ListModelQueryResult<T>, Never> {
+        let key = ListStreamKey(
             model: ModelWrapper(type),
-            isList: true,
             query: query
         )
         
@@ -127,7 +126,7 @@ class ModelProvider: ModelProviding {
             .eraseToAnyPublisher()
     }
     
-    private func startPollingModelDetail<T: BaseModel>(type: T.Type, id: StringConvertible, key: StreamKey<T>) {
+    private func startPollingModelDetail<T: BaseModel>(type: T.Type, id: StringConvertible, key: ModelStreamKey<T>) {
         
         let pollInterval = type.pollInterval
         
@@ -135,7 +134,7 @@ class ModelProvider: ModelProviding {
             .autoconnect()
             .prepend(.now)
             .flatMap { [weak self, networkManager] _ -> AnyPublisher<ModelQueryResult<T>, Never> in
-                if let cachedModel: T = try? self?.fetchCachedModels(for: key.query?.predicate.value).first {
+                if let cachedModel: T = try? self?.fetchCachedModels(for: key.query.localQuery).first {
                     return Just(.loaded(cachedModel))
                         .eraseToAnyPublisher()
                 } else {
@@ -167,7 +166,7 @@ class ModelProvider: ModelProviding {
             )
     }
     
-    private func startPollingModelList<T: ListModel>(type: T.Type, key: StreamKey<T>) {
+    private func startPollingModelList<T: ListModel>(type: T.Type, key: ListStreamKey<T>) {
         
         let pollInterval = type.pollInterval
         
@@ -175,12 +174,16 @@ class ModelProvider: ModelProviding {
             .autoconnect()
             .prepend(.now)
             .flatMap { [weak self, networkManager] _ -> AnyPublisher<ListModelQueryResult<T>, Never> in
+                
+                // TODO: make this so that it fetches on every timer publish to update the cache,
+                // then only send the updated state of the cache with predicate filter applied
+                
                 networkManager.fetchModelList(T.self, query: key.query)
                     .handleEvents(
                         receiveOutput: { [weak self] fetchedModels in
                             switch fetchedModels {
                             case .loaded(let models):
-                                try? self?.databaseManager.deleteAll(T.self)
+//                                try? self?.databaseManager.deleteAll(T.self)
                                 for model in models {
                                     try? self?.databaseManager.save(model)
                                 }
@@ -194,7 +197,7 @@ class ModelProvider: ModelProviding {
             .prepend(
                 // Start with cached values if all are fresh, otherwise show loading until next network fetch
                 {
-                    guard let cachedModels = try? fetchCachedModels(for: key.query?.predicate.value), cachedModels.count > 0 else {
+                    guard let cachedModels = try? fetchCachedModels(for: key.query?.localQuery), cachedModels.count > 0 else {
                         return .loading
                     }
                     
@@ -287,12 +290,17 @@ class ModelProvider: ModelProviding {
     
     // MARK: - Stream Key
     
-    struct StreamKey<T: BaseModel>: Hashable {
+    struct ListStreamKey<T: BaseModel>: Hashable {
         
         let model: ModelWrapper
         
-        let isList: Bool
+        let query: ListModelQuery<T>?
+    }
+    
+    struct ModelStreamKey<T: BaseModel>: Hashable {
         
-        let query: ModelQuery<T>?
+        let model: ModelWrapper
+        
+        let query: ModelQuery<T>
     }
 }

@@ -32,14 +32,14 @@ class MockNetworkManager: NetworkManaging {
         return Just(result).delay(for: networkDelay, scheduler: DispatchQueue.main).eraseToAnyPublisher()
     }
     
-    func fetchModelList<T: ListModel>(_ model: T.Type, query: ModelQuery<T>?) -> AnyPublisher<ListModelQueryResult<T>, Never> {
+    func fetchModelList<T: ListModel>(_ model: T.Type, query: ListModelQuery<T>?) -> AnyPublisher<ListModelQueryResult<T>, Never> {
         Just(
             .loaded(
                 models
                     .compactMap { $0 as? T }
                     .filter {
-                        guard let predicate = query?.predicate else { return true }
-                        return (try? predicate.value.evaluate($0)) ?? false
+                        guard let predicate = query?.localQuery else { return true }
+                        return (try? predicate.evaluate($0)) ?? false
                     }
             )
         )

@@ -10,7 +10,7 @@ import Foundation
 @testable import Enceladus
 import XCTest
 
-class StreamManagerTests: XCTestCase {
+class ModelProviderTests: XCTestCase {
     
     private var cancelables = Set<AnyCancellable>()
     
@@ -222,9 +222,22 @@ class StreamManagerTests: XCTestCase {
         
         modelProvider.streamCollection(
             type: TestModel.self,
-            query: ModelQuery(
-                urlQueryItems: nil,
-                predicate: .equatable("foo", #Predicate { $0.value >= 2 }))
+            query: ListModelQuery(
+                queryItems: [
+                    OrQueryItem(
+                        queryItems: [
+                            EqualQueryItem(
+                                keyPath: \TestModel.value,
+                                value: 2
+                            ),
+                            EqualQueryItem(
+                                keyPath: \TestModel.value,
+                                value: 3
+                            )
+                        ]
+                    )
+                ]
+            )
         ).sink(
             receiveValue: { result in
                 switch result {
@@ -261,9 +274,22 @@ class StreamManagerTests: XCTestCase {
         
         modelProvider.streamCollection(
             type: ShortPollIntervalTestModel.self,
-            query: ModelQuery(
-                urlQueryItems: nil,
-                predicate: .equatable("foo", #Predicate { $0.value >= 2 }))
+            query: ListModelQuery(
+                queryItems: [
+                    OrQueryItem(
+                        queryItems: [
+                            EqualQueryItem(
+                                keyPath: \ShortPollIntervalTestModel.value,
+                                value: 2
+                            ),
+                            EqualQueryItem(
+                                keyPath: \ShortPollIntervalTestModel.value,
+                                value: 3
+                            )
+                        ]
+                    )
+                ]
+            )
         ).sink(
             receiveValue: { result in
                 switch result {

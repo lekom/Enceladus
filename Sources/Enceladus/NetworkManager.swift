@@ -12,7 +12,7 @@ protocol NetworkManaging {
     
     func fetchModelDetail<T: BaseModel>(_ model: T.Type, id: StringConvertible) -> AnyPublisher<ModelQueryResult<T>, Never>
     
-    func fetchModelList<T: ListModel>(_ model: T.Type, query: ModelQuery<T>?) -> AnyPublisher<ListModelQueryResult<T>, Never>
+    func fetchModelList<T: ListModel>(_ model: T.Type, query: ListModelQuery<T>?) -> AnyPublisher<ListModelQueryResult<T>, Never>
 }
 
 class NetworkManager: NetworkManaging {
@@ -31,15 +31,19 @@ class NetworkManager: NetworkManaging {
         .eraseToAnyPublisher()
     }
     
-    func fetchModelList<T: ListModel>(_ model: T.Type, query: ModelQuery<T>?) -> AnyPublisher<ListModelQueryResult<T>, Never> {
+    // TODO: handle pagination w/index
+    func fetchModelList<T: ListModel>(_ model: T.Type, query: ListModelQuery<T>?) -> AnyPublisher<ListModelQueryResult<T>, Never> {
         URLSession.shared.dataTaskPublisher(
             for: T.list.url.appending(
-                queryItems: query?.urlQueryItems ?? []
+                queryItems: query?.remoteQuery ?? []
             )
         )
         .map { $0.data }
         .decode(type: [T].self, decoder: JSONDecoder())
-        .map { .loaded($0) }
+        .map { items in
+            items.enumerated().forEach { $1.index = $0 }
+            return .loaded(items)
+        }
         .catch { Just(.error($0)) }
         .prepend(.loading) // start with loading state
         .eraseToAnyPublisher()
