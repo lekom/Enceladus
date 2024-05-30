@@ -9,7 +9,7 @@ protocol BaseModel: Equatable, Identifiable, Codable, PersistentModel {
     var id: String { get }
     
     /// The date the model was last fetched from the server.
-    var lastCachedDate: Date { get }
+    var lastCachedDate: Date? { get set }
     
     /// The endpoint to fetch the model from the server.
     static var detail: Endpoint { get }

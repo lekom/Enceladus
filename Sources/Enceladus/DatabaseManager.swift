@@ -13,12 +13,12 @@ protocol DatabaseManaging {
     func fetch<T: BaseModel>(
         _ modelType: T.Type,
         predicate: Predicate<T>?,
-        sortedBy: [SortDescriptor<T>]?
+        sortedBy sortDescriptor: [SortDescriptor<T>]?
     ) throws -> [T]
     
     func save(_ model: any BaseModel) throws
     
-    func delete<T: BaseModel>(_ modelType: T.Type, id: String) throws
+    func delete<T: BaseModel>(_ modelType: T.Type, where predicate: Predicate<T>) throws
     
     func deleteAll<T: BaseModel>(_ modelType: T.Type) throws
 }
@@ -40,7 +40,7 @@ extension DatabaseManaging {
     }
     
     func delete<T: BaseModel>(_ model: T) throws {
-        try delete(T.self, id: model.id)
+        try delete(T.self, where: #Predicate { $0.id == model.id })
     }
 }
 
@@ -64,13 +64,14 @@ class DatabaseManager: DatabaseManaging {
     func fetch<T: BaseModel>(
         _ modelType: T.Type,
         predicate: Predicate<T>? = nil,
-        sortedBy: [SortDescriptor<T>]? = nil
+        sortedBy sortDescriptor: [SortDescriptor<T>]? = nil
     ) throws -> [T] {
         let container = try modelContainer(for: T.self)
         let context = ModelContext(container)
         
         let fetchDescriptor = FetchDescriptor<T>(
-            predicate: predicate
+            predicate: predicate,
+            sortBy: sortDescriptor ?? []
         )
         
         return try context.fetch(fetchDescriptor)
@@ -86,14 +87,14 @@ class DatabaseManager: DatabaseManaging {
     
     func delete<T: BaseModel>(
         _ modelType: T.Type,
-        id: String
+        where predicate: Predicate<T>
     ) throws {
         let container = try modelContainer(for: T.self)
         let context = ModelContext(container)
 
         try context.delete(
             model: T.self,
-            where: #Predicate { $0.id == id}
+            where: predicate
         )
         
         try context.save()

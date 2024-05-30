@@ -68,25 +68,6 @@ class ModelQuery<T: BaseModel>: QueryItemCombining {
     }
 }
 
-class ListModelQuery<T: BaseModel>: QueryItemCombining {
-    
-    let queryItems: [any QueryItem<T>]
-    
-    init(queryItems: [any QueryItem<T>]) {
-        self.queryItems = queryItems
-    }
-    
-    func hash(into hasher: inout Hasher) {
-        queryItems.forEach {
-            hasher.combine($0)
-        }
-    }
-    
-    static func ==(lhs: ListModelQuery, rhs: ListModelQuery) -> Bool {
-        lhs.queryItems.elementsEqual(rhs.queryItems, by: { $0.isEqual($1) })
-    }
-}
-
 protocol QueryItem<T>: Equatable, Hashable {
     associatedtype T: BaseModel
     var localQuery: Predicate<T> { get }

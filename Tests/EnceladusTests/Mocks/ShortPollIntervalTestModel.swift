@@ -13,7 +13,7 @@ import SwiftData
 
 @Model
 final class ShortPollIntervalTestModel: Codable, ListModel, Equatable {
-   
+    
     var index: Int = 0
         
     @Attribute(.unique)
@@ -21,7 +21,7 @@ final class ShortPollIntervalTestModel: Codable, ListModel, Equatable {
     
     let value: Int
     
-    let lastCachedDate: Date = Date.now
+    var lastCachedDate: Date? = nil
     
     enum CodingKeys: StringConvertible, CodingKey {
         case id
@@ -52,9 +52,10 @@ final class ShortPollIntervalTestModel: Codable, ListModel, Equatable {
         [\TestModel.id : CodingKeys.id]
     }
     
-    init(id: String, value: Int = 0) {
+    init(id: String, value: Int = 0, lastCachedDate: Date? = .now) {
         self.id = id
         self.value = value
+        self.lastCachedDate = lastCachedDate
     }
     
     // MARK: - Codable

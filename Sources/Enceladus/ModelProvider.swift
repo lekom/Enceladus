@@ -13,7 +13,7 @@ protocol ModelProviding {
     
     func streamModel<T: BaseModel>(type: T.Type, id: String) -> AnyPublisher<ModelQueryResult<T>, Never>
     
-    func streamCollection<T: BaseModel>(type: T.Type, query: ListModelQuery<T>?) -> AnyPublisher<ListModelQueryResult<T>, Never>
+    func streamCollection<T: BaseModel>(type: T.Type, query: ModelQuery<T>?) -> AnyPublisher<ListModelQueryResult<T>, Never>
 }
 
 class ModelProvider: ModelProviding {
@@ -22,19 +22,21 @@ class ModelProvider: ModelProviding {
     private var subjects: [AnyHashable: CurrentValueSubject<Any, Never>] = [:]
     private var subscriberCounts: [AnyHashable: Int] = [:]
     
-    private let databaseManager: DatabaseManaging
-    private let networkManager: NetworkManaging
+    private let queryManager: QueryManaging
     
     private let queue = DispatchQueue(label: "com.enceladus.streammanager")
     
     init(databaseManager: DatabaseManaging, networkManager: NetworkManaging) {
-        self.databaseManager = databaseManager
-        self.networkManager = networkManager
+        self.queryManager = QueryManager(
+            databaseManager: databaseManager,
+            networkManager: networkManager
+        )
     }
     
     func streamModel<T: BaseModel>(type: T.Type, id: String) -> AnyPublisher<ModelQueryResult<T>, Never> {
-        let key = ModelStreamKey<T>(
+        let key = StreamKey<T>(
             model: ModelWrapper(type),
+            type: .detail,
             query: ModelQuery(
                 queryItems: [
                     EqualQueryItem(keyPath: \.id, value: id)
@@ -58,7 +60,7 @@ class ModelProvider: ModelProviding {
         incrementSubscriberCount(for: key)
         
         if getCancellable(for: key) == nil {
-            startPollingModelDetail(type: type, id: id, key: key)
+            startPollingModelDetail(type: type, key: key)
         }
         
         return subject
@@ -81,9 +83,10 @@ class ModelProvider: ModelProviding {
             .eraseToAnyPublisher()
     }
     
-    func streamCollection<T: BaseModel>(type: T.Type, query: ListModelQuery<T>? = nil) -> AnyPublisher<ListModelQueryResult<T>, Never> {
-        let key = ListStreamKey(
+    func streamCollection<T: BaseModel>(type: T.Type, query: ModelQuery<T>? = nil) -> AnyPublisher<ListModelQueryResult<T>, Never> {
+        let key = StreamKey(
             model: ModelWrapper(type),
+            type: .list,
             query: query
         )
         
@@ -126,39 +129,11 @@ class ModelProvider: ModelProviding {
             .eraseToAnyPublisher()
     }
     
-    private func startPollingModelDetail<T: BaseModel>(type: T.Type, id: StringConvertible, key: ModelStreamKey<T>) {
+    private func startPollingModelDetail<T: BaseModel>(type: T.Type, key: StreamKey<T>) {
         
         let pollInterval = type.pollInterval
         
-        cancellables[key] = Timer.publish(every: pollInterval, on: .main, in: .common)
-            .autoconnect()
-            .prepend(.now)
-            .flatMap { [weak self, networkManager] _ -> AnyPublisher<ModelQueryResult<T>, Never> in
-                if let cachedModel: T = try? self?.fetchCachedModels(for: key.query.localQuery).first {
-                    return Just(.loaded(cachedModel))
-                        .eraseToAnyPublisher()
-                } else {
-                    return networkManager.fetchModelDetail(T.self, id: id)
-                        .handleEvents(
-                            receiveOutput: { [weak self] fetchedModel in
-                                switch fetchedModel {
-                                case .loaded(let model):
-                                    try? self?.databaseManager.save(model)
-                                case .error(let error):
-                                    switch error as? NetworkError {
-                                    case .modelNotFound:
-                                        try? self?.databaseManager.delete(T.self, id: id.stringValue)
-                                    case .none:
-                                        break
-                                    }
-                                default:
-                                    break
-                                }
-                            }
-                        )
-                        .eraseToAnyPublisher()
-                }
-            }
+        cancellables[key] = queryManager.fetchModel(T.self, polls: true, query: key.query)
             .sink(
                 receiveValue: { [weak self] model in
                     self?.subjects[key]?.send(model)
@@ -166,50 +141,11 @@ class ModelProvider: ModelProviding {
             )
     }
     
-    private func startPollingModelList<T: ListModel>(type: T.Type, key: ListStreamKey<T>) {
+    private func startPollingModelList<T: ListModel>(type: T.Type, key: StreamKey<T>) {
         
         let pollInterval = type.pollInterval
         
-        cancellables[key] = Timer.publish(every: pollInterval, on: .main, in: .common)
-            .autoconnect()
-            .prepend(.now)
-            .flatMap { [weak self, networkManager] _ -> AnyPublisher<ListModelQueryResult<T>, Never> in
-                
-                // TODO: make this so that it fetches on every timer publish to update the cache,
-                // then only send the updated state of the cache with predicate filter applied
-                
-                networkManager.fetchModelList(T.self, query: key.query)
-                    .handleEvents(
-                        receiveOutput: { [weak self] fetchedModels in
-                            switch fetchedModels {
-                            case .loaded(let models):
-//                                try? self?.databaseManager.deleteAll(T.self)
-                                for model in models {
-                                    try? self?.databaseManager.save(model)
-                                }
-                            default:
-                                break
-                            }
-                        }
-                    )
-                    .eraseToAnyPublisher()
-            }
-            .prepend(
-                // Start with cached values if all are fresh, otherwise show loading until next network fetch
-                {
-                    guard let cachedModels = try? fetchCachedModels(for: key.query?.localQuery), cachedModels.count > 0 else {
-                        return .loading
-                    }
-                    
-                    let freshModels = cachedModels.filter { abs($0.lastCachedDate.timeIntervalSinceNow) < T.cacheDuration }
-                    
-                    if freshModels.count == cachedModels.count {
-                        return .loaded(freshModels)
-                    } else {
-                        return .loading
-                    }
-                }()
-            )
+        cancellables[key] = queryManager.fetchModelList(T.self, polls: true, query: key.query)
             .sink(
                 receiveValue: { [weak self] models in
                     self?.subjects[key]?.send(models)
@@ -220,13 +156,6 @@ class ModelProvider: ModelProviding {
     private func stopPolling(key: AnyHashable) {
         cancellables[key]?.cancel()
         cancellables[key] = nil
-    }
-    
-    private func fetchCachedModels<T: BaseModel>(for predicate: Predicate<T>?) throws -> [T] {
-        try databaseManager.fetch(
-            T.self,
-            predicate: predicate
-        )
     }
     
     enum StreamManagerError: Error {
@@ -290,17 +219,18 @@ class ModelProvider: ModelProviding {
     
     // MARK: - Stream Key
     
-    struct ListStreamKey<T: BaseModel>: Hashable {
+    struct StreamKey<T: BaseModel>: Hashable {
         
         let model: ModelWrapper
         
-        let query: ListModelQuery<T>?
-    }
-    
-    struct ModelStreamKey<T: BaseModel>: Hashable {
+        let type: StreamType
         
-        let model: ModelWrapper
+        let query: ModelQuery<T>?
         
-        let query: ModelQuery<T>
+        enum StreamType {
+            case list
+            case detail
+            case first
+        }
     }
 }

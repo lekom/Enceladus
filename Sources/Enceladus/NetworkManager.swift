@@ -10,17 +10,17 @@ import Foundation
 
 protocol NetworkManaging {
     
-    func fetchModelDetail<T: BaseModel>(_ model: T.Type, id: StringConvertible) -> AnyPublisher<ModelQueryResult<T>, Never>
+    func fetchModelDetail<T: BaseModel>(_ model: T.Type, query: ModelQuery<T>?) -> AnyPublisher<ModelQueryResult<T>, Never>
     
-    func fetchModelList<T: ListModel>(_ model: T.Type, query: ListModelQuery<T>?) -> AnyPublisher<ListModelQueryResult<T>, Never>
+    func fetchModelList<T: ListModel>(_ model: T.Type, query: ModelQuery<T>?) -> AnyPublisher<ListModelQueryResult<T>, Never>
 }
 
 class NetworkManager: NetworkManaging {
             
-    func fetchModelDetail<T: BaseModel>(_ model: T.Type, id: StringConvertible) -> AnyPublisher<ModelQueryResult<T>, Never> {
+    func fetchModelDetail<T: BaseModel>(_ model: T.Type, query: ModelQuery<T>?) -> AnyPublisher<ModelQueryResult<T>, Never> {
         URLSession.shared.dataTaskPublisher(
             for: T.detail.url.appending(
-                queryItems: [URLQueryItem(name: "id", value: id.stringValue)]
+                queryItems: query?.remoteQuery ?? []
             )
         )
         .map { $0.data }
@@ -32,7 +32,7 @@ class NetworkManager: NetworkManaging {
     }
     
     // TODO: handle pagination w/index
-    func fetchModelList<T: ListModel>(_ model: T.Type, query: ListModelQuery<T>?) -> AnyPublisher<ListModelQueryResult<T>, Never> {
+    func fetchModelList<T: ListModel>(_ model: T.Type, query: ModelQuery<T>?) -> AnyPublisher<ListModelQueryResult<T>, Never> {
         URLSession.shared.dataTaskPublisher(
             for: T.list.url.appending(
                 queryItems: query?.remoteQuery ?? []

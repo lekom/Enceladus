@@ -13,14 +13,13 @@ import SwiftData
 final class TestModel: Codable, ListModel, Equatable {
     
     var index: Int = 0
+    var lastCachedDate: Date? = nil
         
     @Attribute(.unique)
     let id: String
     
     let value: Int
-    
-    let lastCachedDate: Date
-    
+        
     enum CodingKeys: StringConvertible, CodingKey {
         case id
         case value
@@ -51,7 +50,7 @@ final class TestModel: Codable, ListModel, Equatable {
         [\TestModel.id : CodingKeys.id]
     }
     
-    init(id: String, value: Int = 0, lastCachedDate: Date = Date.now) {
+    init(id: String, value: Int = 0, lastCachedDate: Date? = .now) {
         self.id = id
         self.value = value
         self.lastCachedDate = lastCachedDate
@@ -63,7 +62,6 @@ final class TestModel: Codable, ListModel, Equatable {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         id = try container.decode(String.self, forKey: .id)
         value = try container.decode(Int.self, forKey: .value)
-        lastCachedDate = try container.decode(Date.self, forKey: .lastCachedDate)
     }
     
     func encode(to encoder: Encoder) throws {

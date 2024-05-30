@@ -64,7 +64,7 @@ class ModelProviderTests: XCTestCase {
     func testStreamCacheDB() {
         
         let testModels = [TestModel(id: "1", value: 42)]
-        dbManager.models = testModels
+        testModels.forEach { try? dbManager.save($0) }
         
         let expectation = expectation(description: "Stream")
         
@@ -165,8 +165,8 @@ class ModelProviderTests: XCTestCase {
     func testStreamListDBHasAFew() {
        
         let testModelsCached = [
-            TestModel(id: "5", value: 5),
-            TestModel(id: "6", value: 6)
+            TestModel(id: "5", value: 5, lastCachedDate: .now),
+            TestModel(id: "6", value: 6, lastCachedDate: .now)
         ]
         
         let testModelsNetwork = [
@@ -175,7 +175,7 @@ class ModelProviderTests: XCTestCase {
             TestModel(id: "3", value: 3)
         ]
         
-        dbManager.models = testModelsCached
+        testModelsCached.forEach { try? dbManager.save($0) }
         networkManager.models = testModelsNetwork
         networkManager.networkDelay = 0.1 // give time for cache to come through first
         
@@ -208,12 +208,65 @@ class ModelProviderTests: XCTestCase {
         wait(for: [expectationCache, expectationNetwork], timeout: 1)
     }
     
+    // deletes missing items from the network response
+    func testStreamListDBDeleteOnMissingValues() {
+       
+        let testModelsCached = [
+            TestModel(id: "5", value: 5, lastCachedDate: .now),
+            TestModel(id: "6", value: 6, lastCachedDate: .now)
+        ]
+        
+        let testModelsNetwork = [
+            TestModel(id: "5", value: 5)
+        ]
+        
+        testModelsCached.forEach { try? dbManager.save($0) }
+        networkManager.models = testModelsNetwork
+        networkManager.networkDelay = 0.1 // give time for cache to come through first
+        
+        let expectationCache = XCTestExpectation(description: "StreamCache")
+        let expectationNetwork = XCTestExpectation(description: "StreamNetwork")
+        
+        modelProvider.streamCollection(
+            type: TestModel.self,
+            query: ModelQuery(
+                queryItems: [
+                    OrQueryItem(queryItems: [
+                        EqualQueryItem(keyPath: \.value, value: 5),
+                        EqualQueryItem(keyPath: \.value, value: 6)
+                    ])
+                ]
+            )
+        ).sink(
+            receiveValue: { result in
+                switch result {
+                case .loaded(let models):
+                    if models.count == 1 {
+                        XCTAssertTrue(models.contains(testModelsNetwork[0]))
+                        expectationNetwork.fulfill()
+                    } else if models.count == 2 {
+                        XCTAssertTrue(models.contains(testModelsCached[0]))
+                        XCTAssertTrue(models.contains(testModelsCached[1]))
+                        expectationCache.fulfill()
+                    }
+                case .error(let error):
+                    XCTFail("un expected error: \(error.localizedDescription)")
+                case .loading:
+                    break
+                }
+            }
+        )
+        .store(in: &cancelables)
+        
+        wait(for: [expectationCache, expectationNetwork], timeout: 1)
+    }
+    
     func testStreamListDBHasAFewFiltered() {
         
         let testModels = [
-            TestModel(id: "1", value: 1),
-            TestModel(id: "2", value: 2),
-            TestModel(id: "3", value: 3)
+            TestModel(id: "1", value: 1, lastCachedDate: .now),
+            TestModel(id: "2", value: 2, lastCachedDate: .now),
+            TestModel(id: "3", value: 3, lastCachedDate: .now)
         ]
         
         networkManager.models = testModels
@@ -222,7 +275,7 @@ class ModelProviderTests: XCTestCase {
         
         modelProvider.streamCollection(
             type: TestModel.self,
-            query: ListModelQuery(
+            query: ModelQuery(
                 queryItems: [
                     OrQueryItem(
                         queryItems: [
@@ -274,7 +327,7 @@ class ModelProviderTests: XCTestCase {
         
         modelProvider.streamCollection(
             type: ShortPollIntervalTestModel.self,
-            query: ListModelQuery(
+            query: ModelQuery(
                 queryItems: [
                     OrQueryItem(
                         queryItems: [

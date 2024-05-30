@@ -20,10 +20,16 @@ class MockNetworkManager: NetworkManaging {
     
     func fetchModelDetail<T: BaseModel>(
         _ model: T.Type,
-        id: any StringConvertible
+        query: ModelQuery<T>?
     ) -> AnyPublisher<ModelQueryResult<T>, Never> {
         
-        let result: ModelQueryResult<T> = if let model = models.first(where: { $0.id == id.stringValue }) as? T {
+        let model: T? = models
+            .compactMap { $0 as? T }
+            .first { model in
+                (try? query?.localQuery.evaluate(model)) ?? true
+            }
+        
+        let result: ModelQueryResult<T> = if let model {
             .loaded(model)
         } else {
             .error(NetworkError.modelNotFound)
@@ -32,7 +38,7 @@ class MockNetworkManager: NetworkManaging {
         return Just(result).delay(for: networkDelay, scheduler: DispatchQueue.main).eraseToAnyPublisher()
     }
     
-    func fetchModelList<T: ListModel>(_ model: T.Type, query: ListModelQuery<T>?) -> AnyPublisher<ListModelQueryResult<T>, Never> {
+    func fetchModelList<T: ListModel>(_ model: T.Type, query: ModelQuery<T>?) -> AnyPublisher<ListModelQueryResult<T>, Never> {
         Just(
             .loaded(
                 models
