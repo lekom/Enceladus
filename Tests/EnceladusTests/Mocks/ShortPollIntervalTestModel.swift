@@ -6,9 +6,8 @@
 //
 
 import Foundation
-
-import Foundation
 @testable import Enceladus
+import EnceladusMocks
 import SwiftData
 
 @Model
@@ -30,7 +29,7 @@ final class ShortPollIntervalTestModel: Codable, ListModel, Equatable {
     
     static var detail: Endpoint {
         Endpoint(
-            service: TestService(),
+            service: MockService(),
             path: "",
             requestMethod: .get
         )
@@ -38,7 +37,7 @@ final class ShortPollIntervalTestModel: Codable, ListModel, Equatable {
     
     static var list: Endpoint {
         Endpoint(
-            service: TestService(),
+            service: MockService(),
             path: "",
             requestMethod: .get
         )
@@ -49,7 +48,7 @@ final class ShortPollIntervalTestModel: Codable, ListModel, Equatable {
     static var cacheDuration: TimeInterval { 120 }
     
     static var remoteQueryableKeys: [AnyKeyPath : StringConvertible] {
-        [\TestModel.id : CodingKeys.id]
+        [\MockBaseModel.id : CodingKeys.id]
     }
     
     init(id: String, value: Int = 0, lastCachedDate: Date? = .now) {

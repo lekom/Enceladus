@@ -1,24 +1,24 @@
 //
-//  TestModel.swift
+//  File.swift
+//  
 //
-//
-//  Created by Leko Murphy on 5/25/24.
+//  Created by Leko Murphy on 5/30/24.
 //
 
+import Enceladus
 import Foundation
-@testable import Enceladus
 import SwiftData
 
 @Model
-final class TestModel: Codable, ListModel, Equatable {
+public class MockBaseModel: ListModel {
     
-    var index: Int = 0
-    var lastCachedDate: Date? = nil
+    public var index: Int = 0
+    public var lastCachedDate: Date? = nil
         
     @Attribute(.unique)
-    let id: String
+    public let id: String
     
-    let value: Int
+    public let value: Int
         
     enum CodingKeys: StringConvertible, CodingKey {
         case id
@@ -26,31 +26,31 @@ final class TestModel: Codable, ListModel, Equatable {
         case lastCachedDate
     }
     
-    static var detail: Endpoint {
+    public static var detail: Endpoint {
         Endpoint(
-            service: TestService(),
+            service: MockService(),
             path: "",
             requestMethod: .get
         )
     }
     
-    static var list: Endpoint {
+    public static var list: Endpoint {
         Endpoint(
-            service: TestService(),
+            service: MockService(),
             path: "",
             requestMethod: .get
         )
     }
     
-    static var pollInterval: TimeInterval { 30 }
+    public static var pollInterval: TimeInterval { 30 }
     
-    static var cacheDuration: TimeInterval { 120 }
+    public static var cacheDuration: TimeInterval { 120 }
     
-    static var remoteQueryableKeys: [AnyKeyPath: StringConvertible] {
-        [\TestModel.id : CodingKeys.id]
+    public static var remoteQueryableKeys: [AnyKeyPath: StringConvertible] {
+        [\MockBaseModel.id : CodingKeys.id]
     }
     
-    init(id: String, value: Int = 0, lastCachedDate: Date? = .now) {
+    public init(id: String, value: Int = 0, lastCachedDate: Date? = .now) {
         self.id = id
         self.value = value
         self.lastCachedDate = lastCachedDate
@@ -58,19 +58,19 @@ final class TestModel: Codable, ListModel, Equatable {
     
     // MARK: - Codable
     
-    init(from decoder: Decoder) throws {
+    required public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         id = try container.decode(String.self, forKey: .id)
         value = try container.decode(Int.self, forKey: .value)
     }
     
-    func encode(to encoder: Encoder) throws {
+    public func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(id, forKey: .id)
         try container.encode(value, forKey: .value)
     }
     
-    static func isEqual(lhs: TestModel, rhs: TestModel) -> Bool {
+    public static func isEqual(lhs: MockBaseModel, rhs: MockBaseModel) -> Bool {
         lhs.id == rhs.id && lhs.value == rhs.value
     }
 }

@@ -7,7 +7,7 @@
 
 import Foundation
 
-protocol Service {
+public protocol Service {
     
     var baseUrl: URL { get }
 }

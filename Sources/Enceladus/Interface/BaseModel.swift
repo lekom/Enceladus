@@ -3,7 +3,7 @@ import Combine
 import Foundation
 import SwiftData
 
-protocol BaseModel: Equatable, Identifiable, Codable, PersistentModel {
+public protocol BaseModel: Equatable, Identifiable, Codable, PersistentModel {
     
     @Attribute(.unique)
     var id: String { get }
@@ -27,14 +27,14 @@ protocol BaseModel: Equatable, Identifiable, Codable, PersistentModel {
     static func isEqual(lhs: Self, rhs: Self) -> Bool
 }
 
-extension BaseModel {
+public extension BaseModel {
     
     static func == (lhs: Self, rhs: Self) -> Bool {
         Self.isEqual(lhs: lhs, rhs: rhs)
     }
 }
 
-protocol ListModel: BaseModel {
+public protocol ListModel: BaseModel {
     
     /// The endpoint to fetch a list of models from the server.
     static var list: Endpoint { get }

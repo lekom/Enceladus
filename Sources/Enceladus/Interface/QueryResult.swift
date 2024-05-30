@@ -7,7 +7,7 @@
 
 import Foundation
 
-enum ModelQueryResult<M: BaseModel> {
+public enum ModelQueryResult<M: BaseModel> {
     
     case loading
     case loaded(M)
@@ -23,7 +23,7 @@ enum ModelQueryResult<M: BaseModel> {
     }
 }
 
-enum ListModelQueryResult<M: ListModel> {
+public enum ListModelQueryResult<M: ListModel> {
     
     case loading
     case loaded([M])

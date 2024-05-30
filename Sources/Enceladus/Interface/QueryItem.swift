@@ -9,14 +9,14 @@ import Combine
 import Foundation
 import SwiftData
 
-typealias EquatableQueryValue = Equatable & Hashable & Codable & StringConvertible
+public typealias EquatableQueryValue = Equatable & Hashable & Codable & StringConvertible
 
-protocol QueryItemCombining: Hashable, Equatable {
+public protocol QueryItemCombining: Hashable, Equatable {
     associatedtype T: BaseModel
     var queryItems: [any QueryItem<T>] { get }
 }
 
-extension QueryItemCombining {
+public extension QueryItemCombining {
     
     var localQuery: Predicate<T> {
         queryItems
@@ -49,36 +49,26 @@ extension QueryItemCombining {
     }
 }
 
-class ModelQuery<T: BaseModel>: QueryItemCombining {
+public struct ModelQuery<T: BaseModel>: QueryItemCombining {
     
-    let queryItems: [any QueryItem<T>]
+    public let queryItems: [any QueryItem<T>]
     
     init(queryItems: [any QueryItem<T>]) {
         self.queryItems = queryItems
     }
-    
-    func hash(into hasher: inout Hasher) {
-        queryItems.forEach {
-            hasher.combine($0)
-        }
-    }
-    
-    static func ==(lhs: ModelQuery, rhs: ModelQuery) -> Bool {
-        lhs.queryItems.elementsEqual(rhs.queryItems, by: { $0.isEqual($1) })
-    }
 }
 
-protocol QueryItem<T>: Equatable, Hashable {
+public protocol QueryItem<T>: Equatable, Hashable {
     associatedtype T: BaseModel
     var localQuery: Predicate<T> { get }
     var remoteQuery: URLQueryItem? { get }
 }
 
-struct AndQueryItem<T: BaseModel>: QueryItem, QueryItemCombining {
+public struct AndQueryItem<T: BaseModel>: QueryItem, QueryItemCombining {
     
-    let queryItems: [any QueryItem<T>]
+    public let queryItems: [any QueryItem<T>]
     
-    var localQuery: Predicate<T> {
+    public var localQuery: Predicate<T> {
         queryItems
             .map { $0.localQuery }
             .reduce(Predicate<T>.true) { partialResult, next in
@@ -88,16 +78,16 @@ struct AndQueryItem<T: BaseModel>: QueryItem, QueryItemCombining {
             }
     }
     
-    var remoteQuery: URLQueryItem? {
+    public var remoteQuery: URLQueryItem? {
         return nil // remote OR query not supported
     }
 }
 
-struct OrQueryItem<T: BaseModel>: QueryItem, QueryItemCombining {
+public struct OrQueryItem<T: BaseModel>: QueryItem, QueryItemCombining {
     
-    let queryItems: [any QueryItem<T>]
+    public let queryItems: [any QueryItem<T>]
     
-    var localQuery: Predicate<T> {
+    public var localQuery: Predicate<T> {
         queryItems
             .map { $0.localQuery }
             .reduce(Predicate<T>.false) { partialResult, next in
@@ -107,17 +97,17 @@ struct OrQueryItem<T: BaseModel>: QueryItem, QueryItemCombining {
             }
     }
     
-    var remoteQuery: URLQueryItem? {
+    public var remoteQuery: URLQueryItem? {
         return nil // remote OR query not supported
     }
 }
 
-struct EqualQueryItem<T: BaseModel, V: EquatableQueryValue>: QueryItem {
+public struct EqualQueryItem<T: BaseModel, V: EquatableQueryValue>: QueryItem {
     
     let keyPath: KeyPath<T, V>
     let value: V
     
-    var localQuery: Predicate<T> {
+    public var localQuery: Predicate<T> {
         return Predicate<T> {
             PredicateExpressions.build_Equal(
                 lhs: PredicateExpressions.build_KeyPath(
@@ -129,7 +119,7 @@ struct EqualQueryItem<T: BaseModel, V: EquatableQueryValue>: QueryItem {
         }
     }
     
-    var remoteQuery: URLQueryItem? {
+    public var remoteQuery: URLQueryItem? {
         guard let key = T.remoteQueryableKeys[keyPath] else {
             return nil
         }

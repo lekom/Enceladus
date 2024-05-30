@@ -7,14 +7,21 @@
 
 import Foundation
 
-protocol StringConvertible {
+public protocol StringConvertible {
     
     var stringValue: String { get }
 }
 
 extension String: StringConvertible {
     
-    var stringValue: String {
+    public var stringValue: String {
         return self
+    }
+}
+
+extension Int: StringConvertible {
+    
+    public var stringValue: String {
+        "\(self)"
     }
 }

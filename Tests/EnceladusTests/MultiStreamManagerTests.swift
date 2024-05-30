@@ -6,6 +6,7 @@
 //
 
 import Combine
+import EnceladusMocks
 import Foundation
 @testable import Enceladus
 import XCTest
@@ -25,7 +26,7 @@ class MultiStreamManagerTests: XCTestCase {
         
         dbManager = MockDatabaseManager(
             modelWrappers: [
-                ModelWrapper(TestModel.self),
+                ModelWrapper(MockBaseModel.self),
                 ModelWrapper(ShortPollIntervalTestModel.self)
             ]
         )
@@ -43,7 +44,7 @@ class MultiStreamManagerTests: XCTestCase {
                 
         let expectation = XCTestExpectation(description: "Stream")
         
-        streamManager.streamModel(type: TestModel.self, id: "1").sink(
+        streamManager.streamModel(type: MockBaseModel.self, id: "1").sink(
             receiveValue: { result in
                 switch result {
                 case .loaded:
@@ -63,12 +64,12 @@ class MultiStreamManagerTests: XCTestCase {
     
     func testStreamCacheDB() {
         
-        let testModels = [TestModel(id: "1", value: 42)]
+        let testModels = [MockBaseModel(id: "1", value: 42)]
         testModels.forEach { try? dbManager.save($0) }
         
         let expectation = expectation(description: "Stream")
         
-        streamManager.streamModel(type: TestModel.self, id: "1").sink(
+        streamManager.streamModel(type: MockBaseModel.self, id: "1").sink(
             receiveValue: { result in
                 switch result {
                 case .loaded(let value):
@@ -88,12 +89,12 @@ class MultiStreamManagerTests: XCTestCase {
     
     func testStreamCacheNetwork() {
         
-        let testModels = [TestModel(id: "1", value: 42)]
+        let testModels = [MockBaseModel(id: "1", value: 42)]
         networkManager.models = testModels
         
         let expectation = expectation(description: "Stream")
         
-        streamManager.streamModel(type: TestModel.self, id: "1").sink(
+        streamManager.streamModel(type: MockBaseModel.self, id: "1").sink(
             receiveValue: { result in
                 switch result {
                 case .loaded(let value):
@@ -144,7 +145,7 @@ class MultiStreamManagerTests: XCTestCase {
         
         let expectation = XCTestExpectation(description: "Stream")
         
-        streamManager.streamList(type: TestModel.self)
+        streamManager.streamList(type: MockBaseModel.self)
             .sink(
                 receiveValue: { result in
                     switch result {
@@ -166,14 +167,14 @@ class MultiStreamManagerTests: XCTestCase {
     func testStreamListDBHasAFew() {
        
         let testModelsCached = [
-            TestModel(id: "5", value: 5, lastCachedDate: .now),
-            TestModel(id: "6", value: 6, lastCachedDate: .now)
+            MockBaseModel(id: "5", value: 5, lastCachedDate: .now),
+            MockBaseModel(id: "6", value: 6, lastCachedDate: .now)
         ]
         
         let testModelsNetwork = [
-            TestModel(id: "1", value: 1),
-            TestModel(id: "2", value: 2),
-            TestModel(id: "3", value: 3)
+            MockBaseModel(id: "1", value: 1),
+            MockBaseModel(id: "2", value: 2),
+            MockBaseModel(id: "3", value: 3)
         ]
         
         testModelsCached.forEach { try? dbManager.save($0) }
@@ -183,7 +184,7 @@ class MultiStreamManagerTests: XCTestCase {
         let expectationCache = XCTestExpectation(description: "StreamCache")
         let expectationNetwork = XCTestExpectation(description: "StreamNetwork")
         
-        streamManager.streamList(type: TestModel.self).sink(
+        streamManager.streamList(type: MockBaseModel.self).sink(
             receiveValue: { result in
                 switch result {
                 case .loaded(let models):
@@ -213,12 +214,12 @@ class MultiStreamManagerTests: XCTestCase {
     func testStreamListDBDeleteOnMissingValues() {
        
         let testModelsCached = [
-            TestModel(id: "5", value: 5, lastCachedDate: .now),
-            TestModel(id: "6", value: 6, lastCachedDate: .now)
+            MockBaseModel(id: "5", value: 5, lastCachedDate: .now),
+            MockBaseModel(id: "6", value: 6, lastCachedDate: .now)
         ]
         
         let testModelsNetwork = [
-            TestModel(id: "5", value: 5)
+            MockBaseModel(id: "5", value: 5)
         ]
         
         testModelsCached.forEach { try? dbManager.save($0) }
@@ -229,7 +230,7 @@ class MultiStreamManagerTests: XCTestCase {
         let expectationNetwork = XCTestExpectation(description: "StreamNetwork")
         
         streamManager.streamList(
-            type: TestModel.self,
+            type: MockBaseModel.self,
             query: ModelQuery(
                 queryItems: [
                     OrQueryItem(queryItems: [
@@ -265,9 +266,9 @@ class MultiStreamManagerTests: XCTestCase {
     func testStreamListDBHasAFewFiltered() {
         
         let testModels = [
-            TestModel(id: "1", value: 1, lastCachedDate: .now),
-            TestModel(id: "2", value: 2, lastCachedDate: .now),
-            TestModel(id: "3", value: 3, lastCachedDate: .now)
+            MockBaseModel(id: "1", value: 1, lastCachedDate: .now),
+            MockBaseModel(id: "2", value: 2, lastCachedDate: .now),
+            MockBaseModel(id: "3", value: 3, lastCachedDate: .now)
         ]
         
         networkManager.models = testModels
@@ -275,17 +276,17 @@ class MultiStreamManagerTests: XCTestCase {
         let expectation = XCTestExpectation(description: "Stream")
         
         streamManager.streamList(
-            type: TestModel.self,
+            type: MockBaseModel.self,
             query: ModelQuery(
                 queryItems: [
                     OrQueryItem(
                         queryItems: [
                             EqualQueryItem(
-                                keyPath: \TestModel.value,
+                                keyPath: \.value,
                                 value: 2
                             ),
                             EqualQueryItem(
-                                keyPath: \TestModel.value,
+                                keyPath: \.value,
                                 value: 3
                             )
                         ]
