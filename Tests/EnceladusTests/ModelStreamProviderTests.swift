@@ -10,11 +10,11 @@ import Foundation
 @testable import Enceladus
 import XCTest
 
-class ModelProviderTests: XCTestCase {
+class ModelStreamProviderTests: XCTestCase {
     
     private var cancelables = Set<AnyCancellable>()
     
-    private var modelProvider: ModelProvider!
+    private var modelProvider: ModelStreamProvider!
     
     private var dbManager: MockDatabaseManager!
     private var networkManager: MockNetworkManager!
@@ -31,7 +31,7 @@ class ModelProviderTests: XCTestCase {
         )
         networkManager = MockNetworkManager()
         
-        modelProvider = ModelProvider(
+        modelProvider = ModelStreamProvider(
             databaseManager: dbManager,
             networkManager: networkManager
         )

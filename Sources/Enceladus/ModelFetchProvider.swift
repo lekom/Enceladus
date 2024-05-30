@@ -8,14 +8,14 @@
 import Combine
 import Foundation
 
-protocol QueryManaging {
+protocol ModelFetchProviding {
     
     func fetchModelList<T: ListModel>(_ modelType: T.Type, polls: Bool, query: ModelQuery<T>?) -> AnyPublisher<ListModelQueryResult<T>, Never>
     func fetchModel<T: BaseModel>(_ modelType: T.Type, polls: Bool, query: ModelQuery<T>?) -> AnyPublisher<ModelQueryResult<T>, Never>
 }
 
 /// Manages the fetching of local and remote data as well as updating local data with remote data
-struct QueryManager: QueryManaging {
+struct ModelFetchProvider: ModelFetchProviding {
     
     let databaseManager: DatabaseManaging
     let networkManager: NetworkManaging

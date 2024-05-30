@@ -9,25 +9,25 @@ import Combine
 import SwiftData
 import Foundation
 
-protocol ModelProviding {
+protocol ModelStreamProviding {
     
     func streamModel<T: BaseModel>(type: T.Type, id: String) -> AnyPublisher<ModelQueryResult<T>, Never>
     
     func streamCollection<T: BaseModel>(type: T.Type, query: ModelQuery<T>?) -> AnyPublisher<ListModelQueryResult<T>, Never>
 }
 
-class ModelProvider: ModelProviding {
+class ModelStreamProvider: ModelStreamProviding {
         
     private var cancellables: [AnyHashable: AnyCancellable] = [:]
     private var subjects: [AnyHashable: CurrentValueSubject<Any, Never>] = [:]
     private var subscriberCounts: [AnyHashable: Int] = [:]
     
-    private let queryManager: QueryManaging
+    private let fetchProvider: ModelFetchProviding
     
     private let queue = DispatchQueue(label: "com.enceladus.streammanager")
     
     init(databaseManager: DatabaseManaging, networkManager: NetworkManaging) {
-        self.queryManager = QueryManager(
+        self.fetchProvider = ModelFetchProvider(
             databaseManager: databaseManager,
             networkManager: networkManager
         )
@@ -133,7 +133,7 @@ class ModelProvider: ModelProviding {
         
         let pollInterval = type.pollInterval
         
-        cancellables[key] = queryManager.fetchModel(T.self, polls: true, query: key.query)
+        cancellables[key] = fetchProvider.fetchModel(T.self, polls: true, query: key.query)
             .sink(
                 receiveValue: { [weak self] model in
                     self?.subjects[key]?.send(model)
@@ -145,7 +145,7 @@ class ModelProvider: ModelProviding {
         
         let pollInterval = type.pollInterval
         
-        cancellables[key] = queryManager.fetchModelList(T.self, polls: true, query: key.query)
+        cancellables[key] = fetchProvider.fetchModelList(T.self, polls: true, query: key.query)
             .sink(
                 receiveValue: { [weak self] models in
                     self?.subjects[key]?.send(models)
