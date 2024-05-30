@@ -23,7 +23,7 @@ protocol BaseModel: Equatable, Identifiable, Codable, PersistentModel {
     /// A map of KeyPaths to the remote queryable key value
     static var remoteQueryableKeys: [AnyKeyPath: StringConvertible] { get }
     
-    /// Explicit equality
+    /// Explicit equality (this should exclude lastCachedDate, etc)
     static func isEqual(lhs: Self, rhs: Self) -> Bool
 }
 

@@ -46,10 +46,14 @@ struct QueryManager: QueryManaging {
                                     try databaseManager.delete(model)
                                 }
                                 
-                                // TODO: apply sort eventually
+                                // TODO: eventually allow sort descriptor to be passed in
                                 let cachedModels = try databaseManager.fetch(
                                     T.self,
-                                    predicate: query?.localQuery
+                                    predicate: query?.localQuery,
+                                    sortedBy: [
+                                        SortDescriptor(\T.index),
+                                        SortDescriptor(\T.id) // use id to break ties
+                                    ]
                                 )
                                 
                                 return .loaded(cachedModels)
