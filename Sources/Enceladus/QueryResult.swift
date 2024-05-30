@@ -37,11 +37,4 @@ enum ListModelQueryResult<M: ListModel> {
             return nil
         }
     }
-    
-    var firstLoaded: M? {
-        guard case .loaded(let models) = self else {
-            return nil
-        }
-        return models.first
-    }
 }
