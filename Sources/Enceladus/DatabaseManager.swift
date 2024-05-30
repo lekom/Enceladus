@@ -48,6 +48,8 @@ class DatabaseManager: DatabaseManaging {
         
     private var modelContainers: [ModelWrapper: ModelContainer] = [:]
     
+    private let queue = DispatchQueue(label: "com.enceledus.databasemanager")
+    
     init(
         models: [any BaseModel.Type] = [],
         configuration: ModelConfiguration? = nil
@@ -66,7 +68,7 @@ class DatabaseManager: DatabaseManaging {
         predicate: Predicate<T>? = nil,
         sortedBy sortDescriptor: [SortDescriptor<T>]? = nil
     ) throws -> [T] {
-        let container = try modelContainer(for: T.self)
+        let container = modelContainer(for: T.self)
         let context = ModelContext(container)
         
         let fetchDescriptor = FetchDescriptor<T>(
@@ -78,7 +80,7 @@ class DatabaseManager: DatabaseManaging {
     }
     
     func save(_ model: any BaseModel) throws {
-        let container = try modelContainer(for: type(of: model))
+        let container = modelContainer(for: type(of: model))
         let context = ModelContext(container)
         context.insert(model)
         
@@ -89,7 +91,7 @@ class DatabaseManager: DatabaseManaging {
         _ modelType: T.Type,
         where predicate: Predicate<T>
     ) throws {
-        let container = try modelContainer(for: T.self)
+        let container = modelContainer(for: T.self)
         let context = ModelContext(container)
 
         try context.delete(
@@ -101,18 +103,10 @@ class DatabaseManager: DatabaseManaging {
     }
     
     func deleteAll<T: BaseModel>(_ modelType: T.Type) throws {
-        let container = try modelContainer(for: T.self)
+        let container = modelContainer(for: T.self)
         let context = ModelContext(container)
 
         try context.delete(model: T.self)
-    }
-    
-    private func modelContainer(for type: any BaseModel.Type) throws -> ModelContainer {
-        let wrapper = ModelWrapper(type)
-        guard let container = modelContainers[wrapper] else {
-            fatalError("Model container not found for \(type)")
-        }
-        return container
     }
     
     @discardableResult
@@ -122,12 +116,31 @@ class DatabaseManager: DatabaseManaging {
     ) throws -> ModelContainer {
         if let configuration {
             let container = try ModelContainer(for: model, configurations: configuration)
-            modelContainers[ModelWrapper(model)] = container
+            setModelContainer(container, for: model)
             return container
         } else {
             let container = try ModelContainer(for: model)
-            modelContainers[ModelWrapper(model)] = container
+            setModelContainer(container, for: model)
             return container
+        }
+    }
+    
+    // MARK: Model Container Access
+    
+    private func modelContainer(for model: any BaseModel.Type) -> ModelContainer {
+        var container: ModelContainer?
+        queue.sync {
+            container = modelContainers[ModelWrapper(model)]
+        }
+        guard let container else {
+            fatalError("Model container not found for \(model)")
+        }
+        return container
+    }
+    
+    private func setModelContainer(_ container: ModelContainer, for model: any BaseModel.Type) {
+        queue.sync {
+            modelContainers[ModelWrapper(model)] = container
         }
     }
 }

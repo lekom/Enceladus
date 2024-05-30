@@ -9,14 +9,21 @@ import Combine
 import SwiftData
 import Foundation
 
-protocol ModelStreamProviding {
+protocol MultiStreamManaging {
     
     func streamModel<T: BaseModel>(type: T.Type, id: String) -> AnyPublisher<ModelQueryResult<T>, Never>
-    
-    func streamCollection<T: BaseModel>(type: T.Type, query: ModelQuery<T>?) -> AnyPublisher<ListModelQueryResult<T>, Never>
+    func streamList<T: ListModel>(type: T.Type, query: ModelQuery<T>?) -> AnyPublisher<ListModelQueryResult<T>, Never>
 }
 
-class ModelStreamProvider: ModelStreamProviding {
+extension MultiStreamManaging {
+    
+    func streamList<T: ListModel>(type: T.Type) -> AnyPublisher<ListModelQueryResult<T>, Never> {
+        streamList(type: type, query: nil)
+    }
+}
+
+/// Manages multiple streams of data to share publishers of the same model type and query.
+class MultiStreamManager: MultiStreamManaging {
         
     private var cancellables: [AnyHashable: AnyCancellable] = [:]
     private var subjects: [AnyHashable: CurrentValueSubject<Any, Never>] = [:]
@@ -83,7 +90,7 @@ class ModelStreamProvider: ModelStreamProviding {
             .eraseToAnyPublisher()
     }
     
-    func streamCollection<T: BaseModel>(type: T.Type, query: ModelQuery<T>? = nil) -> AnyPublisher<ListModelQueryResult<T>, Never> {
+    func streamList<T: ListModel>(type: T.Type, query: ModelQuery<T>?) -> AnyPublisher<ListModelQueryResult<T>, Never> {
         let key = StreamKey(
             model: ModelWrapper(type),
             type: .list,
@@ -130,9 +137,7 @@ class ModelStreamProvider: ModelStreamProviding {
     }
     
     private func startPollingModelDetail<T: BaseModel>(type: T.Type, key: StreamKey<T>) {
-        
-        let pollInterval = type.pollInterval
-        
+                
         cancellables[key] = fetchProvider.fetchModel(T.self, polls: true, query: key.query)
             .sink(
                 receiveValue: { [weak self] model in
@@ -142,9 +147,7 @@ class ModelStreamProvider: ModelStreamProviding {
     }
     
     private func startPollingModelList<T: ListModel>(type: T.Type, key: StreamKey<T>) {
-        
-        let pollInterval = type.pollInterval
-        
+                
         cancellables[key] = fetchProvider.fetchModelList(T.self, polls: true, query: key.query)
             .sink(
                 receiveValue: { [weak self] models in

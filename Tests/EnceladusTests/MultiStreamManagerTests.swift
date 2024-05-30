@@ -10,11 +10,11 @@ import Foundation
 @testable import Enceladus
 import XCTest
 
-class ModelStreamProviderTests: XCTestCase {
+class MultiStreamManagerTests: XCTestCase {
     
     private var cancelables = Set<AnyCancellable>()
     
-    private var modelProvider: ModelStreamProvider!
+    private var streamManager: MultiStreamManaging!
     
     private var dbManager: MockDatabaseManager!
     private var networkManager: MockNetworkManager!
@@ -31,7 +31,7 @@ class ModelStreamProviderTests: XCTestCase {
         )
         networkManager = MockNetworkManager()
         
-        modelProvider = ModelStreamProvider(
+        streamManager = MultiStreamManager(
             databaseManager: dbManager,
             networkManager: networkManager
         )
@@ -43,7 +43,7 @@ class ModelStreamProviderTests: XCTestCase {
                 
         let expectation = XCTestExpectation(description: "Stream")
         
-        modelProvider.streamModel(type: TestModel.self, id: "1").sink(
+        streamManager.streamModel(type: TestModel.self, id: "1").sink(
             receiveValue: { result in
                 switch result {
                 case .loaded:
@@ -68,7 +68,7 @@ class ModelStreamProviderTests: XCTestCase {
         
         let expectation = expectation(description: "Stream")
         
-        modelProvider.streamModel(type: TestModel.self, id: "1").sink(
+        streamManager.streamModel(type: TestModel.self, id: "1").sink(
             receiveValue: { result in
                 switch result {
                 case .loaded(let value):
@@ -93,7 +93,7 @@ class ModelStreamProviderTests: XCTestCase {
         
         let expectation = expectation(description: "Stream")
         
-        modelProvider.streamModel(type: TestModel.self, id: "1").sink(
+        streamManager.streamModel(type: TestModel.self, id: "1").sink(
             receiveValue: { result in
                 switch result {
                 case .loaded(let value):
@@ -120,7 +120,7 @@ class ModelStreamProviderTests: XCTestCase {
         expectation.expectedFulfillmentCount = 25
         expectation.assertForOverFulfill = false
         
-        modelProvider.streamModel(type: ShortPollIntervalTestModel.self, id: "1").sink(
+        streamManager.streamModel(type: ShortPollIntervalTestModel.self, id: "1").sink(
             receiveValue: { result in
                 switch result {
                 case .loaded(let value):
@@ -144,20 +144,21 @@ class ModelStreamProviderTests: XCTestCase {
         
         let expectation = XCTestExpectation(description: "Stream")
         
-        modelProvider.streamCollection(type: TestModel.self).sink(
-            receiveValue: { result in
-                switch result {
-                case .loaded(let models):
-                    XCTAssertEqual(models, [])
-                    expectation.fulfill()
-                case .error(let error):
-                    XCTFail("un expected error: \(error.localizedDescription)")
-                case .loading:
-                    break
+        streamManager.streamList(type: TestModel.self)
+            .sink(
+                receiveValue: { result in
+                    switch result {
+                    case .loaded(let models):
+                        XCTAssertEqual(models, [])
+                        expectation.fulfill()
+                    case .error(let error):
+                        XCTFail("un expected error: \(error.localizedDescription)")
+                    case .loading:
+                        break
+                    }
                 }
-            }
-        )
-        .store(in: &cancelables)
+            )
+            .store(in: &cancelables)
         
         wait(for: [expectation], timeout: 1)
     }
@@ -182,7 +183,7 @@ class ModelStreamProviderTests: XCTestCase {
         let expectationCache = XCTestExpectation(description: "StreamCache")
         let expectationNetwork = XCTestExpectation(description: "StreamNetwork")
         
-        modelProvider.streamCollection(type: TestModel.self).sink(
+        streamManager.streamList(type: TestModel.self).sink(
             receiveValue: { result in
                 switch result {
                 case .loaded(let models):
@@ -227,7 +228,7 @@ class ModelStreamProviderTests: XCTestCase {
         let expectationCache = XCTestExpectation(description: "StreamCache")
         let expectationNetwork = XCTestExpectation(description: "StreamNetwork")
         
-        modelProvider.streamCollection(
+        streamManager.streamList(
             type: TestModel.self,
             query: ModelQuery(
                 queryItems: [
@@ -273,7 +274,7 @@ class ModelStreamProviderTests: XCTestCase {
         
         let expectation = XCTestExpectation(description: "Stream")
         
-        modelProvider.streamCollection(
+        streamManager.streamList(
             type: TestModel.self,
             query: ModelQuery(
                 queryItems: [
@@ -325,7 +326,7 @@ class ModelStreamProviderTests: XCTestCase {
         expectation.assertForOverFulfill = false
         expectation.expectedFulfillmentCount = 25
         
-        modelProvider.streamCollection(
+        streamManager.streamList(
             type: ShortPollIntervalTestModel.self,
             query: ModelQuery(
                 queryItems: [

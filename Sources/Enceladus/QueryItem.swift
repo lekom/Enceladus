@@ -76,7 +76,7 @@ protocol QueryItem<T>: Equatable, Hashable {
 
 struct AndQueryItem<T: BaseModel>: QueryItem, QueryItemCombining {
     
-    var queryItems: [any QueryItem<T>]
+    let queryItems: [any QueryItem<T>]
     
     var localQuery: Predicate<T> {
         queryItems
@@ -95,7 +95,7 @@ struct AndQueryItem<T: BaseModel>: QueryItem, QueryItemCombining {
 
 struct OrQueryItem<T: BaseModel>: QueryItem, QueryItemCombining {
     
-    var queryItems: [any QueryItem<T>]
+    let queryItems: [any QueryItem<T>]
     
     var localQuery: Predicate<T> {
         queryItems
