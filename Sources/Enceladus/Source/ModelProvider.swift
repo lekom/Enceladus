@@ -8,41 +8,7 @@
 import Combine
 import Foundation
 
-#if DEBUG
-var mockedModelProvider: ModelProviding?
-
-public func mockModelProvider(_ provider: ModelProviding) {
-    mockedModelProvider = provider
-}
-#endif
-
-/// Dependency injection accessor for ModelProvider
-public let getModelProvider: () -> ModelProviding = {
-    
-#if DEBUG
-    if isUnitTesting {
-        guard let mockedModelProvider else {
-            fatalError("Mocked model provider not set")
-        }
-        
-        return mockedModelProvider
-    }
-#endif
-    
-    return ModelProvider.shared
-}
-
-/// Provides models from cache and network, either streamed or single fetches
-public protocol ModelProviding {
-    
-    func streamModel<T: BaseModel>(_ modelType: T.Type, id: String) -> AnyPublisher<ModelQueryResult<T>, Never>
-    func streamListModel<T: ListModel>(_ modelType: T.Type, query: ModelQuery<T>) -> AnyPublisher<ListModelQueryResult<T>, Never>
-    
-    func getModel<T: BaseModel>(_ modelType: T.Type, query: ModelQuery<T>) async -> Result<T, Error>
-    func getList<T: ListModel>(_ modelType: T.Type, query: ModelQuery<T>) async -> Result<[T], Error>
-}
-
-internal struct ModelProvider: ModelProviding {
+struct ModelProvider: ModelProviding {
     
     static let shared = ModelProvider(
         databaseManager: DatabaseManager(),
