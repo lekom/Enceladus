@@ -33,8 +33,10 @@ class MultiStreamManagerTests: XCTestCase {
         networkManager = MockNetworkManager()
         
         streamManager = MultiStreamManager(
-            databaseManager: dbManager,
-            networkManager: networkManager
+            fetchProvider: ModelFetchProvider(
+                databaseManager: dbManager,
+                networkManager: networkManager
+            )
         )
     }
     

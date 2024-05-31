@@ -9,6 +9,7 @@ import Combine
 import SwiftData
 import Foundation
 
+/// Manages multiple streams of data to share publishers of the same model type and query.
 protocol MultiStreamManaging {
     
     func streamModel<T: BaseModel>(type: T.Type, id: String) -> AnyPublisher<ModelQueryResult<T>, Never>
@@ -33,11 +34,8 @@ class MultiStreamManager: MultiStreamManaging {
     
     private let queue = DispatchQueue(label: "com.enceladus.streammanager")
     
-    init(databaseManager: DatabaseManaging, networkManager: NetworkManaging) {
-        self.fetchProvider = ModelFetchProvider(
-            databaseManager: databaseManager,
-            networkManager: networkManager
-        )
+    init(fetchProvider: ModelFetchProviding) {
+        self.fetchProvider = fetchProvider
     }
     
     func streamModel<T: BaseModel>(type: T.Type, id: String) -> AnyPublisher<ModelQueryResult<T>, Never> {
@@ -138,7 +136,7 @@ class MultiStreamManager: MultiStreamManaging {
     
     private func startPollingModelDetail<T: BaseModel>(type: T.Type, key: StreamKey<T>) {
                 
-        cancellables[key] = fetchProvider.fetchModel(T.self, polls: true, query: key.query)
+        cancellables[key] = fetchProvider.streamModel(T.self, polls: true, query: key.query)
             .sink(
                 receiveValue: { [weak self] model in
                     self?.subjects[key]?.send(model)
@@ -148,7 +146,7 @@ class MultiStreamManager: MultiStreamManaging {
     
     private func startPollingModelList<T: ListModel>(type: T.Type, key: StreamKey<T>) {
                 
-        cancellables[key] = fetchProvider.fetchModelList(T.self, polls: true, query: key.query)
+        cancellables[key] = fetchProvider.streamList(T.self, polls: true, query: key.query)
             .sink(
                 receiveValue: { [weak self] models in
                     self?.subjects[key]?.send(models)

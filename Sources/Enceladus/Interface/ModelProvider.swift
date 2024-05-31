@@ -16,16 +16,20 @@ public func mockModelProvider(_ provider: ModelProviding) {
 }
 #endif
 
+/// Dependency injection accessor for ModelProvider
 public let getModelProvider: () -> ModelProviding = {
+    
+#if DEBUG
     if isUnitTesting {
         guard let mockedModelProvider else {
             fatalError("Mocked model provider not set")
         }
         
         return mockedModelProvider
-    } else {
-        return ModelProvider.shared
     }
+#endif
+    
+    return ModelProvider.shared
 }
 
 public protocol ModelProviding {
@@ -37,7 +41,7 @@ public protocol ModelProviding {
     func getList<T: ListModel>(_ modelType: T.Type, query: ModelQuery<T>) async -> Result<[T], Error>
 }
 
-struct ModelProvider: ModelProviding {
+internal struct ModelProvider: ModelProviding {
     
     static let shared = ModelProvider(
         databaseManager: DatabaseManager(),
@@ -46,12 +50,18 @@ struct ModelProvider: ModelProviding {
     
     private let databaseManager: DatabaseManaging
     private let networkManager: NetworkManaging
+    private let fetchProvider: ModelFetchProviding
     private let streamManager: MultiStreamManaging
     
     init(databaseManager: DatabaseManaging, networkManager: NetworkManaging) {
         self.databaseManager = databaseManager
         self.networkManager = networkManager
-        self.streamManager = MultiStreamManager(databaseManager: databaseManager, networkManager: networkManager)
+        let fetchProvider = ModelFetchProvider(
+            databaseManager: databaseManager,
+            networkManager: networkManager
+        )
+        self.fetchProvider = fetchProvider
+        self.streamManager = MultiStreamManager(fetchProvider: fetchProvider)
     }
     
     func streamModel<T: BaseModel>(_ modelType: T.Type, id: String) -> AnyPublisher<ModelQueryResult<T>, Never> {

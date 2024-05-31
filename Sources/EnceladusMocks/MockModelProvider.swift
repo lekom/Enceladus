@@ -10,7 +10,7 @@ import Enceladus
 import Foundation
 import SwiftData
 
-public class MockModelProvider: ModelProviding {
+public struct MockModelProvider: ModelProviding {
 
     public func streamModel<T: BaseModel>(_ modelType: T.Type, id: String) -> AnyPublisher<ModelQueryResult<T>, Never> {
         Just(.loading).eraseToAnyPublisher()
@@ -27,6 +27,8 @@ public class MockModelProvider: ModelProviding {
     public func getList<T: ListModel>(_ modelType: T.Type, query: Enceladus.ModelQuery<T>) async -> Result<[T], Error> {
         .failure(MockError.notImplemented)
     }
+    
+    public init() {}
     
     enum MockError: Error {
         case notImplemented
