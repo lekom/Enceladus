@@ -73,12 +73,18 @@ internal struct ModelProvider: ModelProviding {
     }
     
     func getModel<T: BaseModel>(_ modelType: T.Type, query: ModelQuery<T>) async -> Result<T, Error> {
-        // TODO: implement
-        .failure(NetworkError.modelNotFound)
+        do {
+            return try await fetchProvider.getModel(T.self, query: query)
+        } catch {
+            return .failure(error)
+        }
     }
     
     func getList<T: ListModel>(_ modelType: T.Type, query: ModelQuery<T>) async -> Result<[T], Error> {
-        // TODO: implement
-        .failure(NetworkError.modelNotFound)
+        do {
+            return try await fetchProvider.getList(T.self, query: query)
+        } catch {
+            return .failure(error)
+        }
     }
 }
