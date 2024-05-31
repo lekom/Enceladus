@@ -32,6 +32,7 @@ public let getModelProvider: () -> ModelProviding = {
     return ModelProvider.shared
 }
 
+/// Provides models from cache and network, either streamed or single fetches
 public protocol ModelProviding {
     
     func streamModel<T: BaseModel>(_ modelType: T.Type, id: String) -> AnyPublisher<ModelQueryResult<T>, Never>
@@ -73,18 +74,10 @@ internal struct ModelProvider: ModelProviding {
     }
     
     func getModel<T: BaseModel>(_ modelType: T.Type, query: ModelQuery<T>) async -> Result<T, Error> {
-        do {
-            return try await fetchProvider.getModel(T.self, query: query)
-        } catch {
-            return .failure(error)
-        }
+        await fetchProvider.getModel(T.self, query: query)
     }
     
     func getList<T: ListModel>(_ modelType: T.Type, query: ModelQuery<T>) async -> Result<[T], Error> {
-        do {
-            return try await fetchProvider.getList(T.self, query: query)
-        } catch {
-            return .failure(error)
-        }
+        await fetchProvider.getList(T.self, query: query)
     }
 }

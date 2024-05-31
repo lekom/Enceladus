@@ -14,8 +14,8 @@ protocol ModelFetchProviding {
     func streamList<T: ListModel>(_ modelType: T.Type, polls: Bool, query: ModelQuery<T>?) -> AnyPublisher<ListModelQueryResult<T>, Never>
     func streamModel<T: BaseModel>(_ modelType: T.Type, polls: Bool, query: ModelQuery<T>?) -> AnyPublisher<ModelQueryResult<T>, Never>
     
-    func getList<T: ListModel>(_ modelType: T.Type, query: ModelQuery<T>) async throws -> Result<[T], Error>
-    func getModel<T: BaseModel>(_ modelType: T.Type, query: ModelQuery<T>) async throws -> Result<T, Error>
+    func getList<T: ListModel>(_ modelType: T.Type, query: ModelQuery<T>) async -> Result<[T], Error>
+    func getModel<T: BaseModel>(_ modelType: T.Type, query: ModelQuery<T>) async -> Result<T, Error>
 }
 
 /// Manages the fetching of local and remote data as well as updating local data with remote data
@@ -103,7 +103,7 @@ struct ModelFetchProvider: ModelFetchProviding {
             .eraseToAnyPublisher()
     }
     
-    func getList<T: ListModel>(_ modelType: T.Type, query: ModelQuery<T>) async throws -> Result<[T], Error> {
+    func getList<T: ListModel>(_ modelType: T.Type, query: ModelQuery<T>) async -> Result<[T], Error> {
         if let models = freshModelsPrefix(T.self, query: query) {
             return .success(models)
         } else {
@@ -111,7 +111,7 @@ struct ModelFetchProvider: ModelFetchProviding {
         }
     }
     
-    func getModel<T: BaseModel>(_ modelType: T.Type, query: ModelQuery<T>) async throws -> Result<T, Error> {
+    func getModel<T: BaseModel>(_ modelType: T.Type, query: ModelQuery<T>) async -> Result<T, Error> {
         if let model = freshModelsPrefix(T.self, query: query)?.first {
             return .success(model)
         } else {
