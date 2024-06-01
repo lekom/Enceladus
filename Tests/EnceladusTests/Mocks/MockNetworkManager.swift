@@ -20,13 +20,13 @@ class MockNetworkManager: NetworkManaging {
     
     func fetchModelDetail<T: BaseModel>(
         _ model: T.Type,
-        query: ModelQuery<T>?
+        id: String
     ) -> AnyPublisher<ModelQueryResult<T>, Never> {
         
         let model: T? = models
             .compactMap { $0 as? T }
             .first { model in
-                (try? query?.localQuery.evaluate(model)) ?? true
+                model.id == id
             }
         
         let result: ModelQueryResult<T> = if let model {
@@ -53,11 +53,11 @@ class MockNetworkManager: NetworkManaging {
         .eraseToAnyPublisher()
     }
     
-    func fetchModelDetail<T: BaseModel>(_ model: T.Type, query: ModelQuery<T>?) async -> Result<T, any Error> {
+    func fetchModelDetail<T: BaseModel>(_ model: T.Type, id: String) async -> Result<T, any Error> {
         let model: T? = models
             .compactMap { $0 as? T }
             .first { model in
-                (try? query?.localQuery.evaluate(model)) ?? true
+                model.id == id
             }
         
         if let model {
@@ -76,5 +76,31 @@ class MockNetworkManager: NetworkManaging {
             }
         
         return .success(models)
+    }
+    
+    func fetchModelDetail<T: SingletonModel>(_ model: T.Type) -> AnyPublisher<ModelQueryResult<T>, Never> {
+        let model: T? = models
+            .compactMap { $0 as? T }
+            .first
+        
+        let result: ModelQueryResult<T> = if let model {
+            .loaded(model)
+        } else {
+            .error(NetworkError.modelNotFound)
+        }
+        
+        return Just(result).delay(for: networkDelay, scheduler: DispatchQueue.main).eraseToAnyPublisher()
+    }
+    
+    func fetchModelDetail<T>(_ model: T.Type) async -> Result<T, any Error> where T : Enceladus.BaseModel, T : Enceladus.DefaultQueryable {
+        let model: T? = models
+            .compactMap { $0 as? T }
+            .first
+        
+        if let model {
+            return .success(model)
+        } else {
+            return .failure(NetworkError.modelNotFound)
+        }
     }
 }

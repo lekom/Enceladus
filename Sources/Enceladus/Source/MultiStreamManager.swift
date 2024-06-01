@@ -13,6 +13,7 @@ import Foundation
 protocol MultiStreamManaging {
     
     func streamModel<T: BaseModel>(type: T.Type, id: String) -> AnyPublisher<ModelQueryResult<T>, Never>
+    func streamModel<T: SingletonModel>(type: T.Type) -> AnyPublisher<ModelQueryResult<T>, Never>
     func streamList<T: ListModel>(type: T.Type, query: ModelQuery<T>?) -> AnyPublisher<ListModelQueryResult<T>, Never>
 }
 
@@ -36,6 +37,40 @@ class MultiStreamManager: MultiStreamManaging {
     
     init(fetchProvider: ModelFetchProviding) {
         self.fetchProvider = fetchProvider
+    }
+    
+    func streamModel<T: SingletonModel>(type: T.Type) -> AnyPublisher<ModelQueryResult<T>, Never> {
+        let key = StreamKey<T>(
+            model: ModelWrapper(type),
+            type: .detail,
+            query: ModelQuery(
+                queryItems: []
+            )
+        )
+        
+        let subject: CurrentValueSubject<Any, Never>
+        
+        if let existingSubject = subjects[key] {
+            subject = existingSubject
+        } else {
+            assert(
+                subscriberCounts[key] == nil || subscriberCounts[key] == 0,
+                "There should be no subscriber if subjects is nil"
+            )
+            subject = CurrentValueSubject<Any, Never>(ModelQueryResult<T>.loading)
+            setSubject(subject, for: key)
+        }
+        
+        incrementSubscriberCount(for: key)
+        
+        if getCancellable(for: key) == nil {
+            startPollingModelDetail(type: type, key: key)
+        }
+        
+        return setupPublisher(
+            subject: subject.eraseToAnyPublisher(),
+            key: key
+        )
     }
     
     func streamModel<T: BaseModel>(type: T.Type, id: String) -> AnyPublisher<ModelQueryResult<T>, Never> {
@@ -65,27 +100,13 @@ class MultiStreamManager: MultiStreamManaging {
         incrementSubscriberCount(for: key)
         
         if getCancellable(for: key) == nil {
-            startPollingModelDetail(type: type, key: key)
+            startPollingModelDetail(type: type, id: id, key: key)
         }
         
-        return subject
-            .map { model in
-                guard let result = model as? ModelQueryResult<T> else {
-                    assertionFailure("Unexpected model type")
-                    return .error(StreamManagerError.modelMismatchInternalError)
-                }
-                return result
-            }
-            .handleEvents(
-                receiveCancel: { [weak self] in
-                    guard let self = self else { return }
-                    self.subscriberCounts[key]! -= 1
-                    if self.subscriberCounts[key]! == 0 {
-                        self.stopPolling(key: key)
-                    }
-                }
-            )
-            .eraseToAnyPublisher()
+        return setupPublisher(
+            subject: subject.eraseToAnyPublisher(),
+            key: key
+        )
     }
     
     func streamList<T: ListModel>(type: T.Type, query: ModelQuery<T>?) -> AnyPublisher<ListModelQueryResult<T>, Never> {
@@ -114,29 +135,25 @@ class MultiStreamManager: MultiStreamManaging {
             startPollingModelList(type: type, key: key)
         }
         
-        return subject
-            .map { model in
-                guard let result = model as? ListModelQueryResult<T> else {
-                    assertionFailure("Unexpected model type")
-                    return .error(StreamManagerError.modelMismatchInternalError)
-                }
-                return result
-            }
-            .handleEvents(
-                receiveCancel: { [weak self] in
-                    guard let self = self else { return }
-                    self.subscriberCounts[key]! -= 1
-                    if self.subscriberCounts[key]! == 0 {
-                        self.stopPolling(key: key)
-                    }
-                }
-            )
-            .eraseToAnyPublisher()
+        return setupPublisher(
+            subject: subject.eraseToAnyPublisher(),
+            key: key
+        )
     }
     
-    private func startPollingModelDetail<T: BaseModel>(type: T.Type, key: StreamKey<T>) {
+    private func startPollingModelDetail<T: SingletonModel>(type: T.Type, key: StreamKey<T>) {
                 
-        cancellables[key] = fetchProvider.streamModel(T.self, polls: true, query: key.query)
+        cancellables[key] = fetchProvider.streamModel(T.self)
+            .sink(
+                receiveValue: { [weak self] model in
+                    self?.subjects[key]?.send(model)
+                }
+            )
+    }
+    
+    private func startPollingModelDetail<T: BaseModel>(type: T.Type, id: String, key: StreamKey<T>) {
+                
+        cancellables[key] = fetchProvider.streamModel(T.self, id: id)
             .sink(
                 receiveValue: { [weak self] model in
                     self?.subjects[key]?.send(model)
@@ -146,7 +163,7 @@ class MultiStreamManager: MultiStreamManaging {
     
     private func startPollingModelList<T: ListModel>(type: T.Type, key: StreamKey<T>) {
                 
-        cancellables[key] = fetchProvider.streamList(T.self, polls: true, query: key.query)
+        cancellables[key] = fetchProvider.streamList(T.self, query: key.query)
             .sink(
                 receiveValue: { [weak self] models in
                     self?.subjects[key]?.send(models)
@@ -216,6 +233,27 @@ class MultiStreamManager: MultiStreamManaging {
             }
             subscriberCounts[key] = count - 1
         }
+    }
+    
+    private func setupPublisher<T, V>(subject: AnyPublisher<Any, Never>, key: StreamKey<T>) -> AnyPublisher<V, Never> {
+        subject
+            .map {
+                guard let result = $0 as? V else {
+                    assertionFailure("Unexpected model type")
+                    return StreamManagerError.modelMismatchInternalError as! V
+                }
+                return result
+            }
+            .handleEvents(
+                receiveCancel: { [weak self] in
+                    guard let self = self else { return }
+                    self.subscriberCounts[key]! -= 1
+                    if self.subscriberCounts[key]! == 0 {
+                        self.stopPolling(key: key)
+                    }
+                }
+            )
+            .eraseToAnyPublisher()
     }
     
     // MARK: - Stream Key

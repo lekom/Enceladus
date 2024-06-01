@@ -14,9 +14,6 @@ public protocol BaseModel: Equatable, Identifiable, Codable, PersistentModel {
     /// The endpoint to fetch the model from the server.
     static var detail: Endpoint { get }
     
-    /// The interval at which the model should be polled for changes (seconds)
-    static var pollInterval: TimeInterval { get }
-    
     /// The interval at which the model should be cached (seconds)
     static var cacheDuration: TimeInterval { get }
     
@@ -42,3 +39,9 @@ public protocol ListModel: BaseModel {
     /// The index of the model in the list.
     var index: Int { get set }
 }
+
+/// Models that should only have one instance in the cache.  Detail API does not require an id.
+public typealias SingletonModel = BaseModel & DefaultQueryable
+
+/// Models that are able to be fetched without any query provided
+public protocol DefaultQueryable {}

@@ -42,9 +42,7 @@ final class ShortPollIntervalTestModel: Codable, ListModel, Equatable {
             requestMethod: .get
         )
     }
-    
-    static var pollInterval: TimeInterval { 0.001 }
-    
+        
     static var cacheDuration: TimeInterval { 120 }
     
     static var remoteQueryableKeys: [AnyKeyPath : StringConvertible] {
@@ -74,4 +72,9 @@ final class ShortPollIntervalTestModel: Codable, ListModel, Equatable {
     static func isEqual(lhs: ShortPollIntervalTestModel, rhs: ShortPollIntervalTestModel) -> Bool {
         lhs.id == rhs.id && lhs.value == rhs.value
     }
+}
+
+extension ShortPollIntervalTestModel: PollableModel {
+    
+    static var pollingInterval: TimeInterval { 0.001 }
 }

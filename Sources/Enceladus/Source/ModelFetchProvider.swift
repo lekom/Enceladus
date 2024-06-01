@@ -11,11 +11,13 @@ import Foundation
 /// Manages the fetching of local and remote data as well as updating local data with remote data
 protocol ModelFetchProviding {
     
-    func streamList<T: ListModel>(_ modelType: T.Type, polls: Bool, query: ModelQuery<T>?) -> AnyPublisher<ListModelQueryResult<T>, Never>
-    func streamModel<T: BaseModel>(_ modelType: T.Type, polls: Bool, query: ModelQuery<T>?) -> AnyPublisher<ModelQueryResult<T>, Never>
+    func streamList<T: ListModel>(_ modelType: T.Type, query: ModelQuery<T>?) -> AnyPublisher<ListModelQueryResult<T>, Never>
+    func streamModel<T: BaseModel>(_ modelType: T.Type, id: String) -> AnyPublisher<ModelQueryResult<T>, Never>
+    func streamModel<T: SingletonModel>(_ modelType: T.Type) -> AnyPublisher<ModelQueryResult<T>, Never>
     
     func getList<T: ListModel>(_ modelType: T.Type, query: ModelQuery<T>) async -> Result<[T], Error>
-    func getModel<T: BaseModel>(_ modelType: T.Type, query: ModelQuery<T>) async -> Result<T, Error>
+    func getModel<T: BaseModel>(_ modelType: T.Type, id: String) async -> Result<T, Error>
+    func getModel<T: SingletonModel>(_ modelType: T.Type) async -> Result<T, Error>
 }
 
 /// Manages the fetching of local and remote data as well as updating local data with remote data
@@ -24,9 +26,9 @@ struct ModelFetchProvider: ModelFetchProviding {
     let databaseManager: DatabaseManaging
     let networkManager: NetworkManaging
     
-    func streamList<T>(_ modelType: T.Type, polls: Bool, query: ModelQuery<T>?) -> AnyPublisher<ListModelQueryResult<T>, Never> {
+    func streamList<T>(_ modelType: T.Type, query: ModelQuery<T>?) -> AnyPublisher<ListModelQueryResult<T>, Never> {
         
-        timeTrigger(T.self, polls: polls)
+        timeTrigger(for: T.self)
             .flatMap { _ in
                 networkManager.fetchModelList(T.self, query: query)
                     .map { result in
@@ -48,7 +50,7 @@ struct ModelFetchProvider: ModelFetchProviding {
             }
             .prepend(
                 {
-                    if let loaded = freshModelsPrefix(T.self, query: query) {
+                    if let loaded = freshModels(T.self, predicate: query?.localQuery) {
                         .loaded(loaded)
                     } else {
                         .loading
@@ -58,14 +60,14 @@ struct ModelFetchProvider: ModelFetchProviding {
             .eraseToAnyPublisher()
     }
     
-    func streamModel<T>(_ modelType: T.Type, polls: Bool, query: ModelQuery<T>?) -> AnyPublisher<ModelQueryResult<T>, Never> {
-        timeTrigger(T.self, polls: polls)
+    func streamModel<T: SingletonModel>(_ modelType: T.Type) -> AnyPublisher<ModelQueryResult<T>, Never> {
+        timeTrigger(for: T.self)
             .flatMap { _ in
-                networkManager.fetchModelDetail(T.self, query: query)
+                networkManager.fetchModelDetail(T.self)
                     .map { result in
                         switch result {
                         case .loaded(let model):
-                            let result = handleFetchedModel(model, query: query)
+                            let result = handleFetchedModel(model)
                             switch result {
                                 case .success(let model):
                                     return .loaded(model)
@@ -75,12 +77,9 @@ struct ModelFetchProvider: ModelFetchProviding {
                         case .error(let error):
                             switch error as? NetworkError {
                             case .modelNotFound:
-                                if let query {
-                                    try? databaseManager.delete(
-                                        T.self,
-                                        where: query.localQuery
-                                    )
-                                }
+                                try? databaseManager.deleteAll(
+                                    T.self
+                                )
                             case .none:
                                 break
                             }
@@ -93,7 +92,50 @@ struct ModelFetchProvider: ModelFetchProviding {
             }
             .prepend(
                 {
-                    if let loaded = freshModelsPrefix(T.self, query: query)?.first {
+                    if let loaded = freshModels(T.self)?.first {
+                        .loaded(loaded)
+                    } else {
+                        .loading
+                    }
+                }()
+            )
+            .eraseToAnyPublisher()
+    }
+    
+    func streamModel<T: BaseModel>(_ modelType: T.Type, id: String) -> AnyPublisher<ModelQueryResult<T>, Never> {
+        timeTrigger(for: T.self)
+            .flatMap { _ in
+                networkManager.fetchModelDetail(T.self, id: id)
+                    .map { result in
+                        switch result {
+                        case .loaded(let model):
+                            let result = handleFetchedModel(model)
+                            switch result {
+                                case .success(let model):
+                                    return .loaded(model)
+                                case .failure(let error):
+                                    return .error(error)
+                            }
+                        case .error(let error):
+                            switch error as? NetworkError {
+                            case .modelNotFound:
+                                try? databaseManager.delete(
+                                    T.self,
+                                    where: idQuery(id)
+                                )
+                            case .none:
+                                break
+                            }
+                            
+                            return .error(error)
+                        case .loading:
+                            return .loading
+                        }
+                    }
+            }
+            .prepend(
+                {
+                    if let loaded = freshModels(T.self, predicate: idQuery(id))?.first {
                         .loaded(loaded)
                     } else {
                         .loading
@@ -104,24 +146,35 @@ struct ModelFetchProvider: ModelFetchProviding {
     }
     
     func getList<T: ListModel>(_ modelType: T.Type, query: ModelQuery<T>) async -> Result<[T], Error> {
-        if let models = freshModelsPrefix(T.self, query: query) {
+        if let models = freshModels(T.self, predicate: query.localQuery) {
             return .success(models)
         } else {
             return await networkManager.fetchModelList(T.self, query: query)
         }
     }
     
-    func getModel<T: BaseModel>(_ modelType: T.Type, query: ModelQuery<T>) async -> Result<T, Error> {
-        if let model = freshModelsPrefix(T.self, query: query)?.first {
+    func getModel<T: BaseModel>(_ modelType: T.Type, id: String) async -> Result<T, Error> {
+        if let model = freshModels(
+            T.self,
+            predicate: idQuery(id)
+        )?.first {
             return .success(model)
         } else {
-            return await networkManager.fetchModelDetail(T.self, query: query)
+            return await networkManager.fetchModelDetail(T.self, id: id)
         }
     }
     
-    private func freshModelsPrefix<T: BaseModel>(_ type: T.Type, query: ModelQuery<T>?) -> [T]? {
+    func getModel<T: SingletonModel>(_ modelType: T.Type) async -> Result<T, Error> {
+        if let model = freshModels(T.self)?.first {
+            return .success(model)
+        } else {
+            return await networkManager.fetchModelDetail(T.self)
+        }
+    }
+    
+    private func freshModels<T: BaseModel>(_ type: T.Type, predicate: Predicate<T>? = nil) -> [T]? {
         guard
-            let cachedModels = try? databaseManager.fetch(T.self, predicate: query?.localQuery),
+            let cachedModels = try? databaseManager.fetch(T.self, predicate: predicate),
             cachedModels.count > 0
         else {
             return nil
@@ -142,9 +195,9 @@ struct ModelFetchProvider: ModelFetchProviding {
         }
     }
     
-    private func timeTrigger<T: BaseModel>(_ type: T.Type, polls: Bool) -> AnyPublisher<Date, Never> {
-        if polls {
-            return Timer.publish(every: T.pollInterval, on: .main, in: .common)
+    private func timeTrigger<T: BaseModel>(for type: T.Type) -> AnyPublisher<Date, Never> {
+        if let T = T.self as? PollableModel.Type {
+            return Timer.publish(every: T.pollingInterval, on: .main, in: .common)
                 .autoconnect()
                 .prepend(.now)
                 .eraseToAnyPublisher()
@@ -153,15 +206,14 @@ struct ModelFetchProvider: ModelFetchProviding {
         }
     }
     
-    private func handleFetchedModel<T: BaseModel>(_ model: T, query: ModelQuery<T>?) -> Result<T, Error> {
+    private func handleFetchedModel<T: BaseModel>(_ model: T) -> Result<T, Error> {
         try? databaseManager.save(model)
         
         do {
             let cachedModels = try databaseManager.fetch(
                 T.self,
-                predicate: query?.localQuery
+                predicate: idQuery(model.id)
             )
-            assert(cachedModels.count == 1, "expected 1 model for query but found \(cachedModels.count)")
             if let first = cachedModels.first {
                 return .success(first)
             } else {
@@ -205,5 +257,9 @@ struct ModelFetchProvider: ModelFetchProviding {
         } catch {
             return .failure(error)
         }
+    }
+    
+    private func idQuery<T: BaseModel>(_ id: String) -> Predicate<T> {
+        #Predicate { $0.id == id }
     }
 }

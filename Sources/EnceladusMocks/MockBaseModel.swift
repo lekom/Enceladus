@@ -74,3 +74,5 @@ public class MockBaseModel: ListModel {
         lhs.id == rhs.id && lhs.value == rhs.value
     }
 }
+
+extension MockBaseModel: DefaultQueryable {}
