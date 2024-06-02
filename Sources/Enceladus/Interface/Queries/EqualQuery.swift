@@ -15,6 +15,11 @@ public struct EqualQueryItem<T: BaseModel, V: EquatableQueryValue>: QueryItem {
     let keyPath: KeyPath<T, V>
     let value: V
     
+    init(_ keyPath: KeyPath<T, V>, _ value: V) {
+        self.keyPath = keyPath
+        self.value = value
+    }
+    
     public var localQuery: Predicate<T> {
         return Predicate<T> {
             PredicateExpressions.build_Equal(

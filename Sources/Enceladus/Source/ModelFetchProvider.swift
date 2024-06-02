@@ -15,7 +15,7 @@ protocol ModelFetchProviding {
     func streamModel<T: BaseModel>(_ modelType: T.Type, id: String) -> AnyPublisher<ModelQueryResult<T>, Never>
     func streamModel<T: SingletonModel>(_ modelType: T.Type) -> AnyPublisher<ModelQueryResult<T>, Never>
     
-    func getList<T: ListModel>(_ modelType: T.Type, query: ModelQuery<T>) async -> Result<[T], Error>
+    func getList<T: ListModel>(_ modelType: T.Type, query: ModelQuery<T>?) async -> Result<[T], Error>
     func getModel<T: BaseModel>(_ modelType: T.Type, id: String) async -> Result<T, Error>
     func getModel<T: SingletonModel>(_ modelType: T.Type) async -> Result<T, Error>
 }
@@ -50,7 +50,7 @@ struct ModelFetchProvider: ModelFetchProviding {
             }
             .prepend(
                 {
-                    if let loaded = freshModels(T.self, predicate: query?.localQuery) {
+                    if let loaded = freshModels(T.self, predicate: query?.localQuery, sortedBy: defaultListSortDescriptor()) {
                         .loaded(loaded)
                     } else {
                         .loading
@@ -145,8 +145,8 @@ struct ModelFetchProvider: ModelFetchProviding {
             .eraseToAnyPublisher()
     }
     
-    func getList<T: ListModel>(_ modelType: T.Type, query: ModelQuery<T>) async -> Result<[T], Error> {
-        if let models = freshModels(T.self, predicate: query.localQuery) {
+    func getList<T: ListModel>(_ modelType: T.Type, query: ModelQuery<T>?) async -> Result<[T], Error> {
+        if let models = freshModels(T.self, predicate: query?.localQuery, sortedBy: defaultListSortDescriptor()) {
             return .success(models)
         } else {
             return await networkManager.fetchModelList(T.self, query: query)
@@ -172,9 +172,17 @@ struct ModelFetchProvider: ModelFetchProviding {
         }
     }
     
-    private func freshModels<T: BaseModel>(_ type: T.Type, predicate: Predicate<T>? = nil) -> [T]? {
+    private func freshModels<T: BaseModel>(
+        _ type: T.Type,
+        predicate: Predicate<T>? = nil,
+        sortedBy sortDescriptor: [SortDescriptor<T>]? = nil
+    ) -> [T]? {
         guard
-            let cachedModels = try? databaseManager.fetch(T.self, predicate: predicate),
+            let cachedModels = try? databaseManager.fetch(
+                T.self,
+                predicate: predicate,
+                sortedBy: sortDescriptor
+            ),
             cachedModels.count > 0
         else {
             return nil
@@ -261,5 +269,12 @@ struct ModelFetchProvider: ModelFetchProviding {
     
     private func idQuery<T: BaseModel>(_ id: String) -> Predicate<T> {
         #Predicate { $0.id == id }
+    }
+    
+    private func defaultListSortDescriptor<T: ListModel>() -> [SortDescriptor<T>] {
+        [
+            SortDescriptor(\T.index),
+            SortDescriptor(\T.id) // use id to break ties
+        ]
     }
 }

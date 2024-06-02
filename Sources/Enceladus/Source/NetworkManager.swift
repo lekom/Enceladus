@@ -22,7 +22,7 @@ protocol NetworkManaging {
 class NetworkManager: NetworkManaging {
             
     func fetchModelDetail<T: SingletonModel>(_ model: T.Type) async -> Result<T, Error> {
-        await fetchModelDetail(T.self)
+        await fetchModelDetail(T.self, urlQueryItems: nil)
     }
     
     func fetchModelDetail<T: BaseModel>(_ model: T.Type, id: String) async -> Result<T, Error> {
@@ -45,7 +45,7 @@ class NetworkManager: NetworkManaging {
     }
     
     func fetchModelDetail<T: SingletonModel>(_ model: T.Type) -> AnyPublisher<ModelQueryResult<T>, Never> {
-        fetchModelDetail(T.self)
+        fetchModelDetail(T.self, urlQueryItems: nil)
     }
     
     // TODO: handle pagination w/index

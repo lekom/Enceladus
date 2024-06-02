@@ -28,8 +28,9 @@ extension MultiStreamManaging {
 class MultiStreamManager: MultiStreamManaging {
         
     private var cancellables: [AnyHashable: AnyCancellable] = [:]
-    private var subjects: [AnyHashable: CurrentValueSubject<Any, Never>] = [:]
-    private var subscriberCounts: [AnyHashable: Int] = [:]
+    
+    private(set) internal var subjects: [AnyHashable: CurrentValueSubject<Any, Never>] = [:]
+    private(set) internal var subscriberCounts: [AnyHashable: Int] = [:]
     
     private let fetchProvider: ModelFetchProviding
     
@@ -39,22 +40,22 @@ class MultiStreamManager: MultiStreamManaging {
         self.fetchProvider = fetchProvider
     }
     
+    // MARK: - MultiStreamManaging
+    
     func streamModel<T: SingletonModel>(type: T.Type) -> AnyPublisher<ModelQueryResult<T>, Never> {
         let key = StreamKey<T>(
             model: ModelWrapper(type),
             type: .detail,
-            query: ModelQuery(
-                queryItems: []
-            )
+            query: nil
         )
         
         let subject: CurrentValueSubject<Any, Never>
         
-        if let existingSubject = subjects[key] {
+        if let existingSubject = getSubject(for: key) {
             subject = existingSubject
         } else {
             assert(
-                subscriberCounts[key] == nil || subscriberCounts[key] == 0,
+                getSubscriberCount(for: key) == 0,
                 "There should be no subscriber if subjects is nil"
             )
             subject = CurrentValueSubject<Any, Never>(ModelQueryResult<T>.loading)
@@ -79,18 +80,18 @@ class MultiStreamManager: MultiStreamManaging {
             type: .detail,
             query: ModelQuery(
                 queryItems: [
-                    EqualQueryItem(keyPath: \.id, value: id)
+                    EqualQueryItem(\.id, id)
                 ]
             )
         )
         
         let subject: CurrentValueSubject<Any, Never>
         
-        if let existingSubject = subjects[key] {
+        if let existingSubject = getSubject(for: key) {
             subject = existingSubject
         } else {
             assert(
-                subscriberCounts[key] == nil || subscriberCounts[key] == 0,
+                getSubscriberCount(for: key) == 0,
                 "There should be no subscriber if subjects is nil"
             )
             subject = CurrentValueSubject<Any, Never>(ModelQueryResult<T>.loading)
@@ -118,11 +119,11 @@ class MultiStreamManager: MultiStreamManaging {
         
         let subject: CurrentValueSubject<Any, Never>
         
-        if let existingSubject = subjects[key] {
+        if let existingSubject = getSubject(for: key) {
             subject = existingSubject
         } else {
             assert(
-                subscriberCounts[key] == nil || subscriberCounts[key] == 0,
+                getSubscriberCount(for: key) == 0,
                 "There should be no subscriber if subjects is nil"
             )
             subject = CurrentValueSubject<Any, Never>(ListModelQueryResult<T>.loading)
@@ -140,6 +141,8 @@ class MultiStreamManager: MultiStreamManaging {
             key: key
         )
     }
+    
+    // MARK: - Private Helpers
     
     private func startPollingModelDetail<T: SingletonModel>(type: T.Type, key: StreamKey<T>) {
                 
@@ -171,14 +174,32 @@ class MultiStreamManager: MultiStreamManaging {
             )
     }
     
-    private func stopPolling(key: AnyHashable) {
-        cancellables[key]?.cancel()
-        cancellables[key] = nil
-    }
-    
-    enum StreamManagerError: Error {
-        
-        case modelMismatchInternalError
+    private func setupPublisher<T, V>(subject: AnyPublisher<Any, Never>, key: StreamKey<T>) -> AnyPublisher<V, Never> {
+        subject
+            .map {
+                guard let result = $0 as? V else {
+                    assertionFailure("Unexpected model type")
+                    return StreamManagerError.modelMismatchInternalError as! V
+                }
+                return result
+            }
+            .handleEvents(
+                receiveCancel: { [weak self] in
+                    guard let self = self else { return }
+                    queue.sync {
+                        assert((self.subscriberCounts[key] ?? 0) > 0, "should not get cancel if no subscribers")
+                        self.subscriberCounts[key] = (self.subscriberCounts[key] ?? 0) - 1
+                        
+                        if self.subscriberCounts[key] == 0 {
+                            self.cancellables[key]?.cancel()
+                            self.cancellables[key] = nil
+                            
+                            self.subjects[key] = nil
+                        }
+                    }
+                }
+            )
+            .eraseToAnyPublisher()
     }
     
     // MARK: - Thread safe access
@@ -211,7 +232,7 @@ class MultiStreamManager: MultiStreamManaging {
         }
     }
     
-    private func getSubscriberCount(for key: AnyHashable) -> Int {
+    func getSubscriberCount(for key: AnyHashable) -> Int {
         var count: Int = 0
         queue.sync {
             count = subscriberCounts[key] ?? 0
@@ -235,41 +256,10 @@ class MultiStreamManager: MultiStreamManaging {
         }
     }
     
-    private func setupPublisher<T, V>(subject: AnyPublisher<Any, Never>, key: StreamKey<T>) -> AnyPublisher<V, Never> {
-        subject
-            .map {
-                guard let result = $0 as? V else {
-                    assertionFailure("Unexpected model type")
-                    return StreamManagerError.modelMismatchInternalError as! V
-                }
-                return result
-            }
-            .handleEvents(
-                receiveCancel: { [weak self] in
-                    guard let self = self else { return }
-                    self.subscriberCounts[key]! -= 1
-                    if self.subscriberCounts[key]! == 0 {
-                        self.stopPolling(key: key)
-                    }
-                }
-            )
-            .eraseToAnyPublisher()
-    }
+    // MARK: - Error
     
-    // MARK: - Stream Key
-    
-    struct StreamKey<T: BaseModel>: Hashable {
+    enum StreamManagerError: Error {
         
-        let model: ModelWrapper
-        
-        let type: StreamType
-        
-        let query: ModelQuery<T>?
-        
-        enum StreamType {
-            case list
-            case detail
-            case first
-        }
+        case modelMismatchInternalError
     }
 }

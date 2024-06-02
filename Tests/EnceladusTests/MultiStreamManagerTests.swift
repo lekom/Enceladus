@@ -15,7 +15,9 @@ class MultiStreamManagerTests: XCTestCase {
     
     private var cancelables = Set<AnyCancellable>()
     
-    private var streamManager: MultiStreamManaging!
+    private var secondCancelables = Set<AnyCancellable>()
+    
+    private var streamManager: MultiStreamManager!
     
     private var dbManager: MockDatabaseManager!
     private var networkManager: MockNetworkManager!
@@ -23,6 +25,7 @@ class MultiStreamManagerTests: XCTestCase {
     override func setUp() {
         super.setUp()
         cancelables.removeAll()
+        secondCancelables.removeAll()
         
         dbManager = MockDatabaseManager(
             modelWrappers: [
@@ -236,8 +239,8 @@ class MultiStreamManagerTests: XCTestCase {
             query: ModelQuery(
                 queryItems: [
                     OrQueryItem(queryItems: [
-                        EqualQueryItem(keyPath: \.value, value: 5),
-                        EqualQueryItem(keyPath: \.value, value: 6)
+                        EqualQueryItem(\.value, 5),
+                        EqualQueryItem(\.value, 6)
                     ])
                 ]
             )
@@ -283,14 +286,8 @@ class MultiStreamManagerTests: XCTestCase {
                 queryItems: [
                     OrQueryItem(
                         queryItems: [
-                            EqualQueryItem(
-                                keyPath: \.value,
-                                value: 2
-                            ),
-                            EqualQueryItem(
-                                keyPath: \.value,
-                                value: 3
-                            )
+                            EqualQueryItem(\.value, 2),
+                            EqualQueryItem(\.value, 3)
                         ]
                     )
                 ]
@@ -335,14 +332,8 @@ class MultiStreamManagerTests: XCTestCase {
                 queryItems: [
                     OrQueryItem(
                         queryItems: [
-                            EqualQueryItem(
-                                keyPath: \ShortPollIntervalTestModel.value,
-                                value: 2
-                            ),
-                            EqualQueryItem(
-                                keyPath: \ShortPollIntervalTestModel.value,
-                                value: 3
-                            )
+                            EqualQueryItem(\.value, 2),
+                            EqualQueryItem(\.value, 3)
                         ]
                     )
                 ]
@@ -365,5 +356,95 @@ class MultiStreamManagerTests: XCTestCase {
         .store(in: &cancelables)
         
         wait(for: [expectation], timeout: 1)
+    }
+    
+    func testMultipleSubcribers() throws {
+        
+        streamManager.streamList(type: MockBaseModel.self)
+            .sink { _ in }
+            .store(in: &cancelables)
+        
+        streamManager.streamList(type: MockBaseModel.self)
+            .sink { _ in }
+            .store(in: &cancelables)
+        
+        streamManager.streamList(type: MockBaseModel.self)
+            .sink { _ in }
+            .store(in: &cancelables)
+        
+        streamManager.streamModel(type: MockBaseModel.self)
+            .sink { _ in }
+            .store(in: &cancelables)
+        
+        streamManager.streamModel(type: MockBaseModel.self)
+            .sink { _ in }
+            .store(in: &cancelables)
+        
+        streamManager.streamModel(type: MockBaseModel.self, id: "42")
+            .sink { _ in }
+            .store(in: &secondCancelables)
+        
+        streamManager.streamModel(type: MockBaseModel.self, id: "42")
+            .sink { _ in }
+            .store(in: &secondCancelables)
+        
+        streamManager.streamModel(type: MockBaseModel.self, id: "42")
+            .sink { _ in }
+            .store(in: &secondCancelables)
+        
+        streamManager.streamModel(type: MockBaseModel.self, id: "42")
+            .sink { _ in }
+            .store(in: &secondCancelables)
+        
+        // list, singleton and detail w/id query
+        XCTAssertEqualEventually(streamManager.subjects.values.count, 3)
+        
+        let idStreamKey = try XCTUnwrap(
+            (Array(streamManager.subscriberCounts.keys) as? [StreamKey<MockBaseModel>])?.first(where: { $0.query != nil })
+        )
+        
+        XCTAssertEqualEventually(streamManager.subscriberCounts[idStreamKey], 4)
+        
+        XCTAssertEqualEventually(
+            self.streamManager.getSubscriberCount(for: StreamKey(MockBaseModel.self, type: .list, query: nil)),
+            3
+        )
+        
+        XCTAssertEqualEventually(
+            self.streamManager.getSubscriberCount(for: StreamKey(MockBaseModel.self, type: .detail, query: nil)),
+            2
+        )
+        
+        secondCancelables.removeFirst()
+        
+        XCTAssertEqualEventually(self.streamManager.subjects.values.count, 3)
+        XCTAssertEqualEventually(
+            self.streamManager.getSubscriberCount(for: idStreamKey),
+            3
+        )
+        
+        secondCancelables.removeFirst()
+        
+        XCTAssertEqualEventually(self.streamManager.subjects.values.count, 3)
+        XCTAssertEqualEventually(
+            self.streamManager.getSubscriberCount(for: idStreamKey),
+            2
+        )
+        
+        secondCancelables.removeFirst()
+        
+        XCTAssertEqualEventually(self.streamManager.subjects.values.count, 3)
+        XCTAssertEqualEventually(
+            self.streamManager.getSubscriberCount(for: idStreamKey),
+            1
+        )
+        
+        secondCancelables.removeFirst()
+        
+        XCTAssertEqualEventually(self.streamManager.subjects.values.count, 2)
+        XCTAssertEqualEventually(
+            self.streamManager.getSubscriberCount(for: idStreamKey),
+            0
+        )
     }
 }

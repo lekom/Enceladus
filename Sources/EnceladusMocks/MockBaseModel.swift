@@ -50,10 +50,11 @@ public class MockBaseModel: ListModel {
         [\MockBaseModel.id : CodingKeys.id]
     }
     
-    public init(id: String, value: Int = 0, lastCachedDate: Date? = .now) {
+    public init(id: String, value: Int = 0, lastCachedDate: Date? = .now, index: Int = 0) {
         self.id = id
         self.value = value
         self.lastCachedDate = lastCachedDate
+        self.index = index
     }
     
     // MARK: - Codable

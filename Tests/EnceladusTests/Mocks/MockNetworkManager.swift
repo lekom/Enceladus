@@ -92,7 +92,7 @@ class MockNetworkManager: NetworkManaging {
         return Just(result).delay(for: networkDelay, scheduler: DispatchQueue.main).eraseToAnyPublisher()
     }
     
-    func fetchModelDetail<T>(_ model: T.Type) async -> Result<T, any Error> where T : Enceladus.BaseModel, T : Enceladus.DefaultQueryable {
+    func fetchModelDetail<T: SingletonModel>(_ model: T.Type) async -> Result<T, any Error> {
         let model: T? = models
             .compactMap { $0 as? T }
             .first
@@ -102,5 +102,9 @@ class MockNetworkManager: NetworkManaging {
         } else {
             return .failure(NetworkError.modelNotFound)
         }
+    }
+    
+    enum MockNetworkError: Error {
+        case modelNotFound
     }
 }

@@ -39,7 +39,7 @@ struct ModelProvider: ModelProviding {
         streamManager.streamModel(type: T.self)
     }
     
-    func streamFirstModel<T: ListModel>(_ modelType: T.Type, query: ModelQuery<T>) -> AnyPublisher<ModelQueryResult<T>, Never> {
+    func streamFirstModel<T: ListModel>(_ modelType: T.Type, query: ModelQuery<T>?) -> AnyPublisher<ModelQueryResult<T>, Never> {
         streamListModel(modelType.self, query: query)
             .map { result in
                 switch result {
@@ -58,7 +58,7 @@ struct ModelProvider: ModelProviding {
             .eraseToAnyPublisher()
     }
     
-    func streamListModel<T: ListModel>(_ modelType: T.Type, query: ModelQuery<T>) -> AnyPublisher<ListModelQueryResult<T>, Never> {
+    func streamListModel<T: ListModel>(_ modelType: T.Type, query: ModelQuery<T>?) -> AnyPublisher<ListModelQueryResult<T>, Never> {
         streamManager.streamList(type: T.self, query: query)
     }
     
@@ -70,7 +70,7 @@ struct ModelProvider: ModelProviding {
         await fetchProvider.getModel(T.self)
     }
     
-    func getFirstModel<T: ListModel>(_ modelType: T.Type, query: ModelQuery<T>) async -> Result<T, Error> {
+    func getFirstModel<T: ListModel>(_ modelType: T.Type, query: ModelQuery<T>?) async -> Result<T, Error> {
         let list = await getList(T.self, query: query)
         
         switch list {
@@ -85,7 +85,7 @@ struct ModelProvider: ModelProviding {
         }
     }
     
-    func getList<T: ListModel>(_ modelType: T.Type, query: ModelQuery<T>) async -> Result<[T], Error> {
+    func getList<T: ListModel>(_ modelType: T.Type, query: ModelQuery<T>?) async -> Result<[T], Error> {
         await fetchProvider.getList(T.self, query: query)
     }
 }
