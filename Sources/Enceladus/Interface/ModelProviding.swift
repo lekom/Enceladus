@@ -88,6 +88,14 @@ public protocol ModelProviding {
         limit: Int?,
         sortDescriptors: [SortDescriptor<T>]?
     ) async -> Result<[T], Error>
+    
+    /// Global configuration for the model provider.  Call once at app launch to perform any necessary setup.
+    /// Not required if using the default ModelProvider without any request headers
+    /// - Parameters:
+    ///  - headersProvider: A closure that will be called on every network request to provide headers
+    func configure(
+        headersProvider: (() -> [String: String])?
+    )
 }
 
 // MARK: - Defaults

@@ -17,10 +17,14 @@ protocol NetworkManaging {
     func fetchModelDetail<T: BaseModel>(_ model: T.Type, id: String) async -> Result<T, Error>
     func fetchModelDetail<T: SingletonModel>(_ model: T.Type) async -> Result<T, Error>
     func fetchModelList<T: ListModel>(_ model: T.Type, query: ModelQuery<T>?) async -> Result<[T], Error>
+    
+    func configureHeadersProvider(_ provider: (() -> [String: String])?)
 }
 
 class NetworkManager: NetworkManaging {
             
+    private var headersProvider: (() -> [String: String])?
+    
     func fetchModelDetail<T: SingletonModel>(_ model: T.Type) async -> Result<T, Error> {
         await fetchModelDetail(T.self, urlQueryItems: nil)
     }
@@ -30,9 +34,12 @@ class NetworkManager: NetworkManaging {
     }
     
     func fetchModelList<T: ListModel>(_ model: T.Type, query: ModelQuery<T>?) async -> Result<[T], Error> {
+        
+        let request = urlRequest(for: T.list.url.appending(queryItems: query?.remoteQuery ?? []))
+        
         do {
             let (data, _) = try await URLSession.shared.data(
-                for: URLRequest(url: T.list.url.appending(queryItems: query?.remoteQuery ?? []))
+                for: request
             )
             return .success(try JSONDecoder().decode([T].self, from: data))
         } catch {
@@ -51,8 +58,10 @@ class NetworkManager: NetworkManaging {
     // TODO: handle pagination w/index
     func fetchModelList<T: ListModel>(_ model: T.Type, query: ModelQuery<T>?) -> AnyPublisher<ListModelQueryResult<T>, Never> {
         URLSession.shared.dataTaskPublisher(
-            for: T.list.url.appending(
-                queryItems: query?.remoteQuery ?? []
+            for: urlRequest(
+                for:  T.list.url.appending(
+                    queryItems: query?.remoteQuery ?? []
+                )
             )
         )
         .map { $0.data }
@@ -66,13 +75,17 @@ class NetworkManager: NetworkManaging {
         .eraseToAnyPublisher()
     }
     
+    func configureHeadersProvider(_ provider: (() -> [String: String])?) {
+        headersProvider = provider
+    }
+    
     // MARK: Helpers
     
     private func fetchModelDetail<T: BaseModel>(_ model: T.Type, urlQueryItems: [URLQueryItem]?) async -> Result<T, Error> {
         do {
             let (data, _) = try await URLSession.shared.data(
-                for: URLRequest(
-                    url: T.detail.url.appending(
+                for: urlRequest(
+                    for: T.detail.url.appending(
                         queryItems: urlQueryItems ?? []
                     )
                 )
@@ -83,10 +96,13 @@ class NetworkManager: NetworkManaging {
         }
     }
     
-    private func fetchModelDetail<T: BaseModel>(_ model: T.Type, urlQueryItems: [URLQueryItem]?) -> AnyPublisher<ModelQueryResult<T>, Never> {
+    private func fetchModelDetail<T: BaseModel>(
+        _ model: T.Type,
+        urlQueryItems: [URLQueryItem]?
+    ) -> AnyPublisher<ModelQueryResult<T>, Never> {
         URLSession.shared.dataTaskPublisher(
-            for: URLRequest(
-                url: T.detail.url.appending(
+            for: urlRequest(
+                for: T.detail.url.appending(
                     queryItems: urlQueryItems ?? []
                 )
             )
@@ -97,6 +113,14 @@ class NetworkManager: NetworkManaging {
         .catch { Just(.error($0)) }
         .prepend(.loading) // start with loading state
         .eraseToAnyPublisher()
+    }
+    
+    private func urlRequest(for url: URL) -> URLRequest {
+        var request = URLRequest(url: url)
+        headersProvider?().forEach { key, value in
+            request.addValue(value, forHTTPHeaderField: key)
+        }
+        return request
     }
 }
 

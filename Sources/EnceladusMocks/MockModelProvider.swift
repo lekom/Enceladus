@@ -75,6 +75,8 @@ public class MockModelProvider: ModelProviding {
         .failure(MockError.modelNotFound)
     }
     
+    public func configure(headersProvider: (() -> [String : String])?) {}
+    
     public init() {}
     
     // MARK: - MockError

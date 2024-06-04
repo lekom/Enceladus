@@ -116,4 +116,8 @@ struct ModelProvider: ModelProviding {
     ) async -> Result<[T], Error> {
         await fetchProvider.getList(T.self, query: query, limit: limit, sortDescriptors: sortDescriptors)
     }
+    
+    func configure(headersProvider: (() -> [String : String])?) {
+        networkManager.configureHeadersProvider(headersProvider)
+    }
 }

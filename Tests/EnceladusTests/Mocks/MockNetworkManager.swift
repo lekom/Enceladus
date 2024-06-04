@@ -13,6 +13,7 @@ class MockNetworkManager: NetworkManaging {
 
     var networkDelay: DispatchQueue.SchedulerTimeType.Stride = 0
     var models: [any BaseModel] = []
+    var headersProvider: (() -> [String: String])?
     
     init(models: [any BaseModel] = []) {
         self.models = models
@@ -102,6 +103,10 @@ class MockNetworkManager: NetworkManaging {
         } else {
             return .failure(NetworkError.modelNotFound)
         }
+    }
+    
+    func configureHeadersProvider(_ provider: (() -> [String: String])?) {
+        headersProvider = provider
     }
     
     enum MockNetworkError: Error {

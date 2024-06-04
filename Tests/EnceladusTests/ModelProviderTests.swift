@@ -532,4 +532,14 @@ class ModelProviderTests: XCTestCase {
         
         wait(for: [loading, cache, network, loaded], timeout: 1)
     }
+    
+    // MARK: - Test Configuration
+    
+    func testConfigureHeaders() {
+        let headers = ["Authorization": "123"]
+    
+        modelProvider.configure(headersProvider: { headers })
+        
+        XCTAssertEqual(networkManager.headersProvider?(), headers)
+    }
 }
