@@ -18,7 +18,7 @@ To integrate Enceladus into your Xcode project using Swift Package Manager, add 
 
 ```swift
 dependencies: [
-    .package(url: "https://github.com/yourusername/Enceladus.git", from: "1.0.0")
+    .package(url: "https://github.com/manu-labs/Enceladus.git", from: "1.0.0")
 ]
 ```
 
@@ -56,7 +56,7 @@ let modelProvider = getModelProvider()
 
 ### Unit Testing
 
-For unit testing, you can override the `getModelProvider()` function by setting a global variable `mockedModelProvider` to any class or struct that adopts the `ModelProviding` protocol.
+For unit testing, you can override the default model provider returned from `getModelProvider()` by setting a global variable `mockedModelProvider`.  Set it to any mock class or struct that adopts the `ModelProviding` protocol.  `MockModelProvider` is provided in the `EnceladusMocks` target for use in testing.
 
 ```swift
 var mockedModelProvider: ModelProviding?
