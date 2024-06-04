@@ -37,4 +37,17 @@ public enum ListModelQueryResult<M: ListModel> {
             return nil
         }
     }
+    
+    func loadedPrefix(_ maxLength: Int?) -> Self {
+        guard let maxLength = maxLength else {
+            return self
+        }
+        
+        switch self {
+        case .loaded(let models):
+            return .loaded(Array(models.prefix(maxLength)))
+        default:
+            return self
+        }
+    }
 }

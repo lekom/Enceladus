@@ -26,7 +26,12 @@ public class MockModelProvider: ModelProviding {
         Just(.loading).eraseToAnyPublisher()
     }
     
-    public func streamListModel<T: ListModel>(_ modelType: T.Type, query: ModelQuery<T>?) -> AnyPublisher<ListModelQueryResult<T>, Never> {
+    public func streamListModel<T: ListModel>(
+        _ modelType: T.Type,
+        query: ModelQuery<T>?, 
+        limit: Int?,
+        sortDescriptors: [SortDescriptor<T>]?
+    ) -> AnyPublisher<ListModelQueryResult<T>, Never> {
         Just(.loading).eraseToAnyPublisher()
     }
     
@@ -41,7 +46,12 @@ public class MockModelProvider: ModelProviding {
         return .failure(MockError.modelNotFound)
     }
     
-    public func getList<T: ListModel>(_ modelType: T.Type, query: Enceladus.ModelQuery<T>?) async -> Result<[T], Error> {
+    public func getList<T: ListModel>(
+        _ modelType: T.Type,
+        query: Enceladus.ModelQuery<T>?,
+        limit: Int?,
+        sortDescriptors: [SortDescriptor<T>]?
+    ) async -> Result<[T], Error> {
         .failure(MockError.modelNotFound)
     }
     
@@ -49,7 +59,7 @@ public class MockModelProvider: ModelProviding {
         Just(.loading).eraseToAnyPublisher()
     }
     
-    public func streamFirstModel<T: ListModel>(_ modelType: T.Type, query: ModelQuery<T>?) -> AnyPublisher<ModelQueryResult<T>, Never> {
+    public func streamFirstModel<T: ListModel>(_ modelType: T.Type, query: ModelQuery<T>?, sortDescriptors: [SortDescriptor<T>]?) -> AnyPublisher<ModelQueryResult<T>, Never> {
         Just(.loading).eraseToAnyPublisher()
     }
     
@@ -57,7 +67,11 @@ public class MockModelProvider: ModelProviding {
         .failure(MockError.modelNotFound)
     }
     
-    public func getFirstModel<T: ListModel>(_ modelType: T.Type, query: ModelQuery<T>?) async -> Result<T, any Error> {
+    public func getFirstModel<T: ListModel>(
+        _ modelType: T.Type,
+        query: ModelQuery<T>?,
+        sortDescriptors: [SortDescriptor<T>]?
+    ) async -> Result<T, any Error> {
         .failure(MockError.modelNotFound)
     }
     

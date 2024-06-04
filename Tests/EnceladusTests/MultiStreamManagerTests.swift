@@ -150,7 +150,7 @@ class MultiStreamManagerTests: XCTestCase {
         
         let expectation = XCTestExpectation(description: "Stream")
         
-        streamManager.streamList(type: MockBaseModel.self)
+        streamManager.streamList(type: MockBaseModel.self, query: nil, limit: nil, sortDescriptors: nil)
             .sink(
                 receiveValue: { result in
                     switch result {
@@ -189,7 +189,7 @@ class MultiStreamManagerTests: XCTestCase {
         let expectationCache = XCTestExpectation(description: "StreamCache")
         let expectationNetwork = XCTestExpectation(description: "StreamNetwork")
         
-        streamManager.streamList(type: MockBaseModel.self).sink(
+        streamManager.streamList(type: MockBaseModel.self, query: nil, limit: nil, sortDescriptors: nil).sink(
             receiveValue: { result in
                 switch result {
                 case .loaded(let models):
@@ -243,7 +243,9 @@ class MultiStreamManagerTests: XCTestCase {
                         EqualQueryItem(\.value, 6)
                     ])
                 ]
-            )
+            ),
+            limit: nil,
+            sortDescriptors: nil
         ).sink(
             receiveValue: { result in
                 switch result {
@@ -291,7 +293,9 @@ class MultiStreamManagerTests: XCTestCase {
                         ]
                     )
                 ]
-            )
+            ),
+            limit: nil,
+            sortDescriptors: nil
         ).sink(
             receiveValue: { result in
                 switch result {
@@ -337,7 +341,9 @@ class MultiStreamManagerTests: XCTestCase {
                         ]
                     )
                 ]
-            )
+            ),
+            limit: nil,
+            sortDescriptors: nil
         ).sink(
             receiveValue: { result in
                 switch result {
@@ -360,15 +366,15 @@ class MultiStreamManagerTests: XCTestCase {
     
     func testMultipleSubcribers() throws {
         
-        streamManager.streamList(type: MockBaseModel.self)
+        streamManager.streamList(type: MockBaseModel.self, query: nil, limit: nil, sortDescriptors: nil)
             .sink { _ in }
             .store(in: &cancelables)
         
-        streamManager.streamList(type: MockBaseModel.self)
+        streamManager.streamList(type: MockBaseModel.self, query: nil, limit: nil, sortDescriptors: nil)
             .sink { _ in }
             .store(in: &cancelables)
         
-        streamManager.streamList(type: MockBaseModel.self)
+        streamManager.streamList(type: MockBaseModel.self, query: nil, limit: nil, sortDescriptors: nil)
             .sink { _ in }
             .store(in: &cancelables)
         
@@ -406,7 +412,9 @@ class MultiStreamManagerTests: XCTestCase {
         XCTAssertEqualEventually(streamManager.subscriberCounts[idStreamKey], 4)
         
         XCTAssertEqualEventually(
-            self.streamManager.getSubscriberCount(for: StreamKey(MockBaseModel.self, type: .list, query: nil)),
+            self.streamManager.getSubscriberCount(
+                for: StreamKey(MockBaseModel.self, type: .list(limit: nil, sortDescriptors: nil), query: nil)
+            ),
             3
         )
         

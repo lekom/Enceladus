@@ -14,14 +14,12 @@ protocol MultiStreamManaging {
     
     func streamModel<T: BaseModel>(type: T.Type, id: String) -> AnyPublisher<ModelQueryResult<T>, Never>
     func streamModel<T: SingletonModel>(type: T.Type) -> AnyPublisher<ModelQueryResult<T>, Never>
-    func streamList<T: ListModel>(type: T.Type, query: ModelQuery<T>?) -> AnyPublisher<ListModelQueryResult<T>, Never>
-}
-
-extension MultiStreamManaging {
-    
-    func streamList<T: ListModel>(type: T.Type) -> AnyPublisher<ListModelQueryResult<T>, Never> {
-        streamList(type: type, query: nil)
-    }
+    func streamList<T: ListModel>(
+        type: T.Type,
+        query: ModelQuery<T>?,
+        limit: Int?,
+        sortDescriptors: [SortDescriptor<T>]?
+    ) -> AnyPublisher<ListModelQueryResult<T>, Never>
 }
 
 /// Manages multiple streams of data to share publishers of the same model type and query.
@@ -110,10 +108,15 @@ class MultiStreamManager: MultiStreamManaging {
         )
     }
     
-    func streamList<T: ListModel>(type: T.Type, query: ModelQuery<T>?) -> AnyPublisher<ListModelQueryResult<T>, Never> {
+    func streamList<T: ListModel>(
+        type: T.Type,
+        query: ModelQuery<T>?,
+        limit: Int?,
+        sortDescriptors: [SortDescriptor<T>]?
+    ) -> AnyPublisher<ListModelQueryResult<T>, Never> {
         let key = StreamKey(
             model: ModelWrapper(type),
-            type: .list,
+            type: .list(limit: limit, sortDescriptors: sortDescriptors),
             query: query
         )
         
@@ -165,13 +168,17 @@ class MultiStreamManager: MultiStreamManaging {
     }
     
     private func startPollingModelList<T: ListModel>(type: T.Type, key: StreamKey<T>) {
-                
-        cancellables[key] = fetchProvider.streamList(T.self, query: key.query)
-            .sink(
-                receiveValue: { [weak self] models in
-                    self?.subjects[key]?.send(models)
-                }
-            )
+        
+        cancellables[key] = fetchProvider.streamList(
+            T.self,
+            query: key.query,
+            sortDescriptors: key.sortDescriptors
+        )
+        .sink(
+            receiveValue: { [weak self] models in
+                self?.subjects[key]?.send(models.loadedPrefix(key.limit))
+            }
+        )
     }
     
     private func setupPublisher<T, V>(subject: AnyPublisher<Any, Never>, key: StreamKey<T>) -> AnyPublisher<V, Never> {

@@ -27,9 +27,19 @@ struct StreamKey<T: BaseModel>: Hashable {
     
     let query: ModelQuery<T>?
     
-    enum StreamType {
-        case list
+    enum StreamType: Hashable {
+        case list(limit: Int?, sortDescriptors: [SortDescriptor<T>]?)
         case detail
         case first
+    }
+    
+    var limit: Int? {
+        guard case let .list(limit, _) = type else { return nil }
+        return limit
+    }
+    
+    var sortDescriptors: [SortDescriptor<T>]? {
+        guard case let .list(_, sortDescriptors) = type else { return nil }
+        return sortDescriptors
     }
 }

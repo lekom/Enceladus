@@ -39,8 +39,12 @@ struct ModelProvider: ModelProviding {
         streamManager.streamModel(type: T.self)
     }
     
-    func streamFirstModel<T: ListModel>(_ modelType: T.Type, query: ModelQuery<T>?) -> AnyPublisher<ModelQueryResult<T>, Never> {
-        streamListModel(modelType.self, query: query)
+    func streamFirstModel<T: ListModel>(
+        _ modelType: T.Type,
+        query: ModelQuery<T>?,
+        sortDescriptors: [SortDescriptor<T>]?
+    ) -> AnyPublisher<ModelQueryResult<T>, Never> {
+        streamListModel(modelType.self, query: query, limit: 1, sortDescriptors: sortDescriptors)
             .map { result in
                 switch result {
                 case .loaded(let models):
@@ -58,8 +62,18 @@ struct ModelProvider: ModelProviding {
             .eraseToAnyPublisher()
     }
     
-    func streamListModel<T: ListModel>(_ modelType: T.Type, query: ModelQuery<T>?) -> AnyPublisher<ListModelQueryResult<T>, Never> {
-        streamManager.streamList(type: T.self, query: query)
+    func streamListModel<T: ListModel>(
+        _ modelType: T.Type,
+        query: ModelQuery<T>?,
+        limit: Int?,
+        sortDescriptors: [SortDescriptor<T>]?
+    ) -> AnyPublisher<ListModelQueryResult<T>, Never> {
+        streamManager.streamList(
+            type: T.self,
+            query: query,
+            limit: limit,
+            sortDescriptors: sortDescriptors
+        )
     }
     
     func getModel<T: BaseModel>(_ modelType: T.Type, id: String) async -> Result<T, Error> {
@@ -70,8 +84,17 @@ struct ModelProvider: ModelProviding {
         await fetchProvider.getModel(T.self)
     }
     
-    func getFirstModel<T: ListModel>(_ modelType: T.Type, query: ModelQuery<T>?) async -> Result<T, Error> {
-        let list = await getList(T.self, query: query)
+    func getFirstModel<T: ListModel>(
+        _ modelType: T.Type,
+        query: ModelQuery<T>?,
+        sortDescriptors: [SortDescriptor<T>]?
+    ) async -> Result<T, Error> {
+        let list = await getList(
+            T.self,
+            query: query,
+            limit: 1,
+            sortDescriptors: sortDescriptors
+        )
         
         switch list {
         case .success(let models):
@@ -85,7 +108,12 @@ struct ModelProvider: ModelProviding {
         }
     }
     
-    func getList<T: ListModel>(_ modelType: T.Type, query: ModelQuery<T>?) async -> Result<[T], Error> {
-        await fetchProvider.getList(T.self, query: query)
+    func getList<T: ListModel>(
+        _ modelType: T.Type,
+        query: ModelQuery<T>?,
+        limit: Int?,
+        sortDescriptors: [SortDescriptor<T>]?
+    ) async -> Result<[T], Error> {
+        await fetchProvider.getList(T.self, query: query, limit: limit, sortDescriptors: sortDescriptors)
     }
 }

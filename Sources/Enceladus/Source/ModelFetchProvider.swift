@@ -11,12 +11,25 @@ import Foundation
 /// Manages the fetching of local and remote data as well as updating local data with remote data
 protocol ModelFetchProviding {
     
-    func streamList<T: ListModel>(_ modelType: T.Type, query: ModelQuery<T>?) -> AnyPublisher<ListModelQueryResult<T>, Never>
+    func streamList<T: ListModel>(
+        _ modelType: T.Type,
+        query: ModelQuery<T>?,
+        sortDescriptors: [SortDescriptor<T>]?
+    ) -> AnyPublisher<ListModelQueryResult<T>, Never>
+    
     func streamModel<T: BaseModel>(_ modelType: T.Type, id: String) -> AnyPublisher<ModelQueryResult<T>, Never>
+    
     func streamModel<T: SingletonModel>(_ modelType: T.Type) -> AnyPublisher<ModelQueryResult<T>, Never>
     
-    func getList<T: ListModel>(_ modelType: T.Type, query: ModelQuery<T>?) async -> Result<[T], Error>
+    func getList<T: ListModel>(
+        _ modelType: T.Type,
+        query: ModelQuery<T>?,
+        limit: Int?,
+        sortDescriptors: [SortDescriptor<T>]?
+    ) async -> Result<[T], Error>
+    
     func getModel<T: BaseModel>(_ modelType: T.Type, id: String) async -> Result<T, Error>
+    
     func getModel<T: SingletonModel>(_ modelType: T.Type) async -> Result<T, Error>
 }
 
@@ -26,7 +39,11 @@ struct ModelFetchProvider: ModelFetchProviding {
     let databaseManager: DatabaseManaging
     let networkManager: NetworkManaging
     
-    func streamList<T>(_ modelType: T.Type, query: ModelQuery<T>?) -> AnyPublisher<ListModelQueryResult<T>, Never> {
+    func streamList<T>(
+        _ modelType: T.Type,
+        query: ModelQuery<T>?,
+        sortDescriptors: [SortDescriptor<T>]?
+    ) -> AnyPublisher<ListModelQueryResult<T>, Never> {
         
         timeTrigger(for: T.self)
             .flatMap { _ in
@@ -50,7 +67,11 @@ struct ModelFetchProvider: ModelFetchProviding {
             }
             .prepend(
                 {
-                    if let loaded = freshModels(T.self, predicate: query?.localQuery, sortedBy: defaultListSortDescriptor()) {
+                    if let loaded = freshModels(
+                        T.self,
+                        predicate: query?.localQuery,
+                        sortedBy: sortDescriptors ?? defaultListSortDescriptor()
+                    ) {
                         .loaded(loaded)
                     } else {
                         .loading
@@ -145,9 +166,22 @@ struct ModelFetchProvider: ModelFetchProviding {
             .eraseToAnyPublisher()
     }
     
-    func getList<T: ListModel>(_ modelType: T.Type, query: ModelQuery<T>?) async -> Result<[T], Error> {
-        if let models = freshModels(T.self, predicate: query?.localQuery, sortedBy: defaultListSortDescriptor()) {
-            return .success(models)
+    func getList<T: ListModel>(
+        _ modelType: T.Type,
+        query: ModelQuery<T>?,
+        limit: Int? = nil,
+        sortDescriptors: [SortDescriptor<T>]? = nil
+    ) async -> Result<[T], Error> {
+        if
+            let models = freshModels(
+                T.self,
+                predicate: query?.localQuery,
+                sortedBy: sortDescriptors ?? defaultListSortDescriptor()
+            ),
+            let limit,
+            models.count >= limit
+        {
+            return .success(Array(models.prefix(limit)))
         } else {
             return await networkManager.fetchModelList(T.self, query: query)
         }

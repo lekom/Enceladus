@@ -89,7 +89,7 @@ class ModelProviderTests: XCTestCase {
         let expectation = expectation(description: "Stream")
         expectation.expectedFulfillmentCount = 2
         
-        modelProvider.streamListModel(MockBaseModel.self, query: nil)
+        modelProvider.streamListModel(MockBaseModel.self)
             .sink { result in
                 switch result {
                 case .loaded(let models):
@@ -246,7 +246,7 @@ class ModelProviderTests: XCTestCase {
                 try? databaseManager.save($0)
             }
         
-        let result = await modelProvider.getList(MockBaseModel.self, query: nil)
+        let result = await modelProvider.getList(MockBaseModel.self, query: nil, limit: 3, sortDescriptors: nil)
         
         switch result {
         case .success(let models):
