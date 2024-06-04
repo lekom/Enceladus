@@ -64,7 +64,7 @@ getModelProvider().configure(headersProvider: { ["authorization": "abc"] })
 
 ### Unit Testing
 
-For unit testing, you can override the default model provider returned from `getModelProvider()` by setting a global variable `mockedModelProvider`.  Set it to any mock class or struct that adopts the `ModelProviding` protocol.  `MockModelProvider` is provided in the `EnceladusMocks` target for use in testing.
+For unit testing, you can override the default model provider returned from `getModelProvider()` by setting a global variable `mockedModelProvider`.  Set it to any mock instance that adopts the `ModelProviding` protocol.  `MockModelProvider` is provided for convenience in the `EnceladusMocks` target for use in testing.
 
 ```swift
 var mockedModelProvider: ModelProviding?
