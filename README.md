@@ -107,10 +107,6 @@ case .failure(let error):
 }
 ```
 
-## License
-
-Enceladus is released under the MIT license. See [LICENSE](LICENSE) for details.
-
 ## Contributing
 
 Contributions are welcome! Please open an issue or submit a pull request.
