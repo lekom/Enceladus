@@ -1,6 +1,6 @@
 # Enceladus
 
-Enceladus is a Swift-based framework designed to stream cached and network results of a `BaseModel` or `ListModel`, facilitating efficient data retrieval and management by leveraging both local caching mechanisms and network requests.
+Enceladus is a Swift-based framework designed to stream cached and network results of a `BaseModel` or `ListModel`, facilitating efficient data retrieval and management by leveraging both local caching with `SwiftData` and network requests.
 
 ## Features
 
@@ -48,7 +48,7 @@ public protocol ModelProviding {
 
 ### Accessing the Model Provider
 
-You can access the model provider using the `getModelProvider()` function. This function returns an instance of a class or struct that conforms to the `ModelProviding` protocol.
+You can access the model provider using the `getModelProvider()` function. This function returns an instance that conforms to the `ModelProviding` protocol.
 
 ```swift
 let modelProvider = getModelProvider()
