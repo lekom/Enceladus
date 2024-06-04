@@ -5,7 +5,7 @@ Enceladus is a Swift-based framework designed to stream cached and network resul
 ## Features
 
 - Local caching using [SwiftData](https://developer.apple.com/xcode/swiftdata/).
-- Built-in polling. As long as a stream is active for a given query/ model, it is fetched and emitted at the interval provided in each model  
+- Built-in polling. As long as a stream is active for a given query/ model, it is fetched and emitted at the interval specified by each model  
 - Stream models by unique identifier or as a singleton
 - Stream lists of models based on query and sort descriptors. Queries are transformed into `SwiftData` predicates.
 - Fetch models asynchronously using `async/await`.
