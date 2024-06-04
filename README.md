@@ -54,6 +54,14 @@ You can access the model provider using the `getModelProvider()` function. This 
 let modelProvider = getModelProvider()
 ```
 
+### Providing Headers for Network Requests
+
+Call `getModelProvider().configure(headersProvider...` once at app launch to ensure any required headers are sent with each network request.  The provided `headersProvider` closure is called on each network request and the returned headers are not cached by this lib between network requests.
+
+```swift
+getModelProvider().configure(headersProvider: { ["authorization": "abc"] })
+```
+
 ### Unit Testing
 
 For unit testing, you can override the default model provider returned from `getModelProvider()` by setting a global variable `mockedModelProvider`.  Set it to any mock class or struct that adopts the `ModelProviding` protocol.  `MockModelProvider` is provided in the `EnceladusMocks` target for use in testing.
