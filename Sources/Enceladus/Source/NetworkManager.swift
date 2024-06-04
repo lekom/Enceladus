@@ -68,7 +68,7 @@ class NetworkManager: NetworkManaging {
     
     // MARK: Helpers
     
-    private func fetchModelDetail<T: BaseModel>(_ model: T.Type, urlQueryItems: [URLQueryItem]? = nil) async -> Result<T, Error> {
+    private func fetchModelDetail<T: BaseModel>(_ model: T.Type, urlQueryItems: [URLQueryItem]?) async -> Result<T, Error> {
         do {
             let (data, _) = try await URLSession.shared.data(
                 for: URLRequest(
@@ -83,7 +83,7 @@ class NetworkManager: NetworkManaging {
         }
     }
     
-    private func fetchModelDetail<T: BaseModel>(_ model: T.Type, urlQueryItems: [URLQueryItem]? = nil) -> AnyPublisher<ModelQueryResult<T>, Never> {
+    private func fetchModelDetail<T: BaseModel>(_ model: T.Type, urlQueryItems: [URLQueryItem]?) -> AnyPublisher<ModelQueryResult<T>, Never> {
         URLSession.shared.dataTaskPublisher(
             for: URLRequest(
                 url: T.detail.url.appending(
