@@ -59,6 +59,7 @@ struct ModelFetchProvider: ModelFetchProviding {
                                     return .error(error)
                             }
                         case .loading:
+                            assertionFailure("loading should only be prepended to initial stream")
                             return .loading
                         case .error(let error):
                             return .error(error)
@@ -107,6 +108,7 @@ struct ModelFetchProvider: ModelFetchProviding {
                             
                             return .error(error)
                         case .loading:
+                            assertionFailure("loading should only be prepended to initial stream")
                             return .loading
                         }
                     }
@@ -150,6 +152,7 @@ struct ModelFetchProvider: ModelFetchProviding {
                             
                             return .error(error)
                         case .loading:
+                            assertionFailure("loading should only be prepended to initial stream")
                             return .loading
                         }
                     }

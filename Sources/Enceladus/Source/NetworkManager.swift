@@ -71,7 +71,6 @@ class NetworkManager: NetworkManaging {
             return .loaded(items)
         }
         .catch { Just(.error($0)) }
-        .prepend(.loading) // start with loading state
         .eraseToAnyPublisher()
     }
     
@@ -111,7 +110,6 @@ class NetworkManager: NetworkManaging {
         .decode(type: T.self, decoder: JSONDecoder())
         .map { .loaded($0) }
         .catch { Just(.error($0)) }
-        .prepend(.loading) // start with loading state
         .eraseToAnyPublisher()
     }
     
