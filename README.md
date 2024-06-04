@@ -18,7 +18,7 @@ To integrate Enceladus into your Xcode project using Swift Package Manager, add 
 
 ```swift
 dependencies: [
-    .package(url: "https://github.com/manu-labs/Enceladus.git", from: "1.0.0")
+    .package(url: "https://github.com/lekom/Enceladus.git", from: "1.0.0")
 ]
 ```
 
