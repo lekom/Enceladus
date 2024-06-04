@@ -1,13 +1,13 @@
 # Enceladus
 
-Enceladus is a Swift-based framework designed to stream cached and network results of a `BaseModel` or `ListModel`, facilitating efficient data retrieval and management by leveraging both local caching with `SwiftData` and network requests.
+Enceladus is a Swift-based framework designed to stream cached and network results with a simple API.
 
 ## Features
 
-- Stream models by unique identifier.
-- Stream singleton models.
-- Stream the first matching model from a list based on query and sort descriptors.
-- Stream lists of models from the cache or remotely.
+- Local caching using [SwiftData](https://developer.apple.com/xcode/swiftdata/).
+- Built-in polling. As long as a stream is active for a given query/ model, it is fetched and emitted at the interval provided in each model  
+- Stream models by unique identifier or as a singleton
+- Stream lists of models based on query and sort descriptors. Queries are transformed into `SwiftData` predicates.
 - Fetch models asynchronously using `async/await`.
 
 ## Installation
@@ -43,6 +43,8 @@ public protocol ModelProviding {
     func getModel<T: SingletonModel>(_ modelType: T.Type) async -> Result<T, Error>
     func getFirstModel<T: ListModel>(_ modelType: T.Type, query: ModelQuery<T>?, sortDescriptors: [SortDescriptor<T>]?) async -> Result<T, Error>
     func getList<T: ListModel>(_ modelType: T.Type, query: ModelQuery<T>?, limit: Int?, sortDescriptors: [SortDescriptor<T>]?) async -> Result<[T], Error>
+
+    func configure(headersProvider: (() -> [String: String])?)
 }
 ```
 
