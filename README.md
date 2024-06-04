@@ -39,7 +39,6 @@ public protocol ModelProviding {
     func streamFirstModel<T: ListModel>(_ modelType: T.Type, query: ModelQuery<T>?, sortDescriptors: [SortDescriptor<T>]?) -> AnyPublisher<ModelQueryResult<T>, Never>
     func streamModels<T: ListModel>(_ modelType: T.Type, query: ModelQuery<T>?, limit: Int?, sortDescriptors: [SortDescriptor<T>]?) -> AnyPublisher<ListQueryResult<T>, Never>
 
-
     func getModel<T: BaseModel>(_ modelType: T.Type, id: String) async -> Result<T, Error>
     func getModel<T: SingletonModel>(_ modelType: T.Type) async -> Result<T, Error>
     func getFirstModel<T: ListModel>(_ modelType: T.Type, query: ModelQuery<T>?, sortDescriptors: [SortDescriptor<T>]?) async -> Result<T, Error>
@@ -89,14 +88,12 @@ modelProvider.streamModel(MyModel.self, id: "123")
 #### Fetching a Model Asynchronously
 
 ```swift
-Task {
-    let result = await modelProvider.getModel(MyModel.self, id: "123")
-    switch result {
-    case .success(let model):
-        print("Model: \(model)")
-    case .failure(let error):
-        print("Error: \(error)")
-    }
+let result = await modelProvider.getModel(MyModel.self, id: "123")
+switch result {
+case .success(let model):
+    print("Model: \(model)")
+case .failure(let error):
+    print("Error: \(error)")
 }
 ```
 
