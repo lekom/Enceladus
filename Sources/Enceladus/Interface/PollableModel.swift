@@ -7,7 +7,7 @@
 
 import Foundation
 
-protocol PollableModel {
+public protocol PollableModel {
     
     static var pollingInterval: TimeInterval { get }    
 }

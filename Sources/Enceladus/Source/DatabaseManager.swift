@@ -16,6 +16,8 @@ protocol DatabaseManaging {
         sortedBy sortDescriptor: [SortDescriptor<T>]?
     ) throws -> [T]
     
+    func register(_ modelType: any BaseModel.Type)
+    
     func save(_ model: any BaseModel) throws
     
     func delete<T: BaseModel>(_ modelType: T.Type, where predicate: Predicate<T>) throws
@@ -47,9 +49,7 @@ extension DatabaseManaging {
 class DatabaseManager: DatabaseManaging {
         
     private var modelContainers: [ModelWrapper: ModelContainer] = [:]
-    
-    private let queue = DispatchQueue(label: "com.enceledus.databasemanager")
-    
+        
     init(
         models: [any BaseModel.Type] = [],
         configuration: ModelConfiguration? = nil
@@ -58,6 +58,14 @@ class DatabaseManager: DatabaseManaging {
             for model in models {
                 try createAndStoreModelContainer(for: model, configuration: configuration)
             }
+        } catch {
+            assertionFailure("Failed to create model container: \(error)")
+        }
+    }
+    
+    func register(_ modelType: any BaseModel.Type) {
+        do {
+            try createAndStoreModelContainer(for: modelType, configuration: nil)
         } catch {
             assertionFailure("Failed to create model container: \(error)")
         }
@@ -84,6 +92,8 @@ class DatabaseManager: DatabaseManaging {
         let context = ModelContext(container)
         context.insert(model)
         
+        model.lastCachedDate = .now
+        
         try context.save()
     }
     
@@ -109,6 +119,18 @@ class DatabaseManager: DatabaseManaging {
         try context.delete(model: T.self)
     }
     
+    // MARK: Model Container Access
+    
+    private func modelContainer(for model: any BaseModel.Type) -> ModelContainer {
+    
+        guard let container = modelContainers[ModelWrapper(model)] else {
+            fatalError("Model container not found for \(model)")
+        }
+        return container
+    }
+    
+    // MARK: - Initialization of model containers (only done once at app launch)
+    
     @discardableResult
     private func createAndStoreModelContainer(
         for model: any BaseModel.Type,
@@ -125,22 +147,7 @@ class DatabaseManager: DatabaseManaging {
         }
     }
     
-    // MARK: Model Container Access
-    
-    private func modelContainer(for model: any BaseModel.Type) -> ModelContainer {
-        var container: ModelContainer?
-        queue.sync {
-            container = modelContainers[ModelWrapper(model)]
-        }
-        guard let container else {
-            fatalError("Model container not found for \(model)")
-        }
-        return container
-    }
-    
     private func setModelContainer(_ container: ModelContainer, for model: any BaseModel.Type) {
-        queue.sync {
-            modelContainers[ModelWrapper(model)] = container
-        }
+        modelContainers[ModelWrapper(model)] = container
     }
 }

@@ -117,7 +117,13 @@ struct ModelProvider: ModelProviding {
         await fetchProvider.getList(T.self, query: query, limit: limit, sortDescriptors: sortDescriptors)
     }
     
-    func configure(headersProvider: (() -> [String : String])?) {
+    func configure(
+        modelTypes: [any BaseModel.Type],
+        headersProvider: (() -> [String : String])?
+    ) {
+        for modelType in modelTypes {
+            databaseManager.register(modelType)
+        }
         networkManager.configureHeadersProvider(headersProvider)
     }
 }

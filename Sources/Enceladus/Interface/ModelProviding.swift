@@ -94,6 +94,7 @@ public protocol ModelProviding {
     /// - Parameters:
     ///  - headersProvider: A closure that will be called on every network request to provide headers
     func configure(
+        modelTypes: [any BaseModel.Type],
         headersProvider: (() -> [String: String])?
     )
 }

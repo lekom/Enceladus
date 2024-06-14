@@ -9,11 +9,12 @@ import Foundation
 
 public struct Endpoint {
     
-    public let service: Service
+    public let service: Service.Type
+    
     public let path: String
     public let requestMethod: RequestMethodType
     
-    public init(service: Service, path: String, requestMethod: RequestMethodType) {
+    public init(service: Service.Type, path: String, requestMethod: RequestMethodType) {
         self.service = service
         self.path = path
         self.requestMethod = requestMethod

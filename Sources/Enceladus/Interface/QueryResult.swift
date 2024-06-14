@@ -13,7 +13,7 @@ public enum ModelQueryResult<M: BaseModel> {
     case loaded(M)
     case error(Error)
     
-    var value: M? {
+    public var value: M? {
         switch self {
         case .loaded(let model):
             return model
@@ -29,7 +29,7 @@ public enum ListModelQueryResult<M: ListModel> {
     case loaded([M])
     case error(Error)
     
-    var value: [M]? {
+    public var value: [M]? {
         switch self {
         case .loaded(let models):
             return models

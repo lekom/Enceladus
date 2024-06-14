@@ -89,7 +89,7 @@ struct ModelFetchProvider: ModelFetchProviding {
                     .map { result in
                         switch result {
                         case .loaded(let model):
-                            let result = handleFetchedModel(model)
+                            let result = handleFetchedSingletonModel(model)
                             switch result {
                                 case .success(let model):
                                     return .loaded(model)
@@ -251,6 +251,21 @@ struct ModelFetchProvider: ModelFetchProviding {
         }
     }
     
+    private func handleFetchedSingletonModel<T: SingletonModel>(_ model: T) -> Result<T, Error> {
+        try? databaseManager.save(model)
+        
+        do {
+            let cachedModels = try databaseManager.fetch(T.self)
+            if let first = cachedModels.first {
+                return .success(first)
+            } else {
+                return .failure(NetworkError.modelNotFound)
+            }
+        } catch {
+            return .failure(error)
+        }
+    }
+    
     private func handleFetchedModel<T: BaseModel>(_ model: T) -> Result<T, Error> {
         try? databaseManager.save(model)
         
@@ -279,7 +294,6 @@ struct ModelFetchProvider: ModelFetchProviding {
             }
             
             for model in models {
-                model.lastCachedDate = .now
                 try databaseManager.save(model)
                 modelsToDelete[model.id] = nil
             }

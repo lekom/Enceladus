@@ -9,5 +9,5 @@ import Foundation
 
 public protocol Service {
     
-    var baseUrl: URL { get }
+    static var baseUrl: URL { get }
 }

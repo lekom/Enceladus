@@ -28,7 +28,7 @@ public class MockBaseModel: ListModel {
     
     public static var detail: Endpoint {
         Endpoint(
-            service: MockService(),
+            service: MockService.self,
             path: "",
             requestMethod: .get
         )
@@ -36,7 +36,7 @@ public class MockBaseModel: ListModel {
     
     public static var list: Endpoint {
         Endpoint(
-            service: MockService(),
+            service: MockService.self,
             path: "",
             requestMethod: .get
         )
