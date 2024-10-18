@@ -65,8 +65,12 @@ class NetworkManager: NetworkManaging {
             )
         )
         .map { $0.data }
-        .decode(type: [T].self, decoder: JSONDecoder())
-        .map { items in
+        .decode(type: [String: [T]].self, decoder: JSONDecoder())
+        .map { itemsMap in
+            guard let items = itemsMap[T.nestedKey] else {
+                return .error(NetworkError.malformedListResponse)
+            }
+            
             items.enumerated().forEach { $1.index = $0 }
             return .loaded(items)
         }
@@ -81,10 +85,15 @@ class NetworkManager: NetworkManaging {
     // MARK: Helpers
     
     private func fetchModelDetail<T: BaseModel>(_ model: T.Type, urlQueryItems: [URLQueryItem]?) async -> Result<T, Error> {
+        
+        guard let detailUrl = T.detail?.url else {
+            return .failure(NetworkError.detailUrlMissing)
+        }
+        
         do {
             let (data, _) = try await URLSession.shared.data(
                 for: urlRequest(
-                    for: T.detail.url.appending(
+                    for: detailUrl.appending(
                         queryItems: urlQueryItems ?? []
                     )
                 )
@@ -99,9 +108,14 @@ class NetworkManager: NetworkManaging {
         _ model: T.Type,
         urlQueryItems: [URLQueryItem]?
     ) -> AnyPublisher<ModelQueryResult<T>, Never> {
-        URLSession.shared.dataTaskPublisher(
+        
+        guard let detailUrl = T.detail?.url else {
+            return Just(.error(NetworkError.detailUrlMissing)).eraseToAnyPublisher()
+        }
+        
+        return URLSession.shared.dataTaskPublisher(
             for: urlRequest(
-                for: T.detail.url.appending(
+                for: detailUrl.appending(
                     queryItems: urlQueryItems ?? []
                 )
             )
@@ -123,5 +137,7 @@ class NetworkManager: NetworkManaging {
 }
 
 enum NetworkError: Error {
+    case detailUrlMissing
     case modelNotFound
+    case malformedListResponse
 }

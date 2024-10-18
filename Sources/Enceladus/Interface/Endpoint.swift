@@ -7,7 +7,7 @@
 
 import Foundation
 
-public struct Endpoint {
+public struct Endpoint: Sendable {
     
     public let service: Service.Type
     

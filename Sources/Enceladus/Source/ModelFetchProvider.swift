@@ -45,25 +45,34 @@ struct ModelFetchProvider: ModelFetchProviding {
         sortDescriptors: [SortDescriptor<T>]?
     ) -> AnyPublisher<ListModelQueryResult<T>, Never> {
         
-        timeTrigger(for: T.self)
+        let databaseUpdates = databaseManager.databaseUpdatePublisher.filter { $0.isRelevant(to: modelType) }
+        
+        return timeTrigger(for: T.self)
             .flatMap { _ in
                 networkManager.fetchModelList(T.self, query: query)
-                    .map { result in
+                    .handleEvents(receiveOutput: { result in
                         switch result {
                         case .loaded(let models):
-                            let result = handleFetchedList(models, query: query)
-                            switch result {
-                                case .success(let models):
-                                    return .loaded(models)
-                                case .failure(let error):
-                                    return .error(error)
-                            }
-                        case .loading:
-                            assertionFailure("loading should only be prepended to initial stream")
-                            return .loading
+                            handleFetchedList(models, query: query)
                         case .error(let error):
-                            return .error(error)
+                            assertionFailure(error.localizedDescription)
+                        case .loading:
+                            assertionFailure("should not be loading")
                         }
+                    })
+                    .flatMap { _ in
+                        return databaseUpdates.map { _ in
+                            if let loaded = freshModels(
+                                T.self,
+                                predicate: query?.localQuery,
+                                sortedBy: sortDescriptors
+                            ) {
+                                return .loaded(loaded)
+                            } else {
+                                return .loaded([])
+                            }
+                        }
+                        .debounce(for: 0.05, scheduler: DispatchQueue.main)
                     }
             }
             .prepend(
@@ -71,7 +80,7 @@ struct ModelFetchProvider: ModelFetchProviding {
                     if let loaded = freshModels(
                         T.self,
                         predicate: query?.localQuery,
-                        sortedBy: sortDescriptors ?? defaultListSortDescriptor()
+                        sortedBy: sortDescriptors
                     ) {
                         .loaded(loaded)
                     } else {
@@ -83,34 +92,38 @@ struct ModelFetchProvider: ModelFetchProviding {
     }
     
     func streamModel<T: SingletonModel>(_ modelType: T.Type) -> AnyPublisher<ModelQueryResult<T>, Never> {
-        timeTrigger(for: T.self)
+        
+        let databaseUpdates = databaseManager.databaseUpdatePublisher.filter { $0.isRelevant(to: modelType) }
+        
+        return timeTrigger(for: T.self)
             .flatMap { _ in
                 networkManager.fetchModelDetail(T.self)
-                    .map { result in
+                    .handleEvents(receiveOutput: { result in
                         switch result {
                         case .loaded(let model):
-                            let result = handleFetchedSingletonModel(model)
-                            switch result {
-                                case .success(let model):
-                                    return .loaded(model)
-                                case .failure(let error):
-                                    return .error(error)
-                            }
+                            handleFetchedSingletonModel(model)
                         case .error(let error):
                             switch error as? NetworkError {
                             case .modelNotFound:
                                 try? databaseManager.deleteAll(
                                     T.self
                                 )
-                            case .none:
+                            default:
                                 break
                             }
-                            
-                            return .error(error)
                         case .loading:
                             assertionFailure("loading should only be prepended to initial stream")
-                            return .loading
                         }
+                    })
+                    .flatMap { result in
+                        databaseUpdates.map { _ in
+                            if let loaded = freshModels(T.self)?.first {
+                                return .loaded(loaded)
+                            } else {
+                                return .error(NetworkError.modelNotFound)
+                            }
+                        }
+                        .debounce(for: 0.05, scheduler: DispatchQueue.main)
                     }
             }
             .prepend(
@@ -126,19 +139,53 @@ struct ModelFetchProvider: ModelFetchProviding {
     }
     
     func streamModel<T: BaseModel>(_ modelType: T.Type, id: String) -> AnyPublisher<ModelQueryResult<T>, Never> {
-        timeTrigger(for: T.self)
+        
+        func streamFirst<G: ListModel>(type: G.Type) -> AnyPublisher<ModelQueryResult<T>, Never> {
+            streamList(
+                G.self,
+                query: .equals(\.id, id),
+                sortDescriptors: nil
+            )
+            .filter { !$0.isLoading }
+            .map { result -> ModelQueryResult<T> in
+                switch result {
+                case .loaded(let models):
+                    if let loaded = models.first as? T {
+                        return .loaded(loaded)
+                    } else {
+                        return .error(NetworkError.modelNotFound)
+                    }
+                case .error(let error):
+                    return .error(error)
+                case .loading:
+                    assertionFailure("loading should be filtered out")
+                    return .loading
+                }
+            }
+            .eraseToAnyPublisher()
+        }
+        
+        guard T.detail != nil else {
+            if let P = T.self as? any ListModel.Type {
+                return streamFirst(type: P.self)
+            } else {
+                return Just(
+                    .error(NetworkError.detailUrlMissing)
+                )
+                .eraseToAnyPublisher()
+            }
+        }
+        
+        let databaseUpdates = databaseManager.databaseUpdatePublisher.filter { $0.isRelevant(to: modelType, id: id) }
+        
+        return timeTrigger(for: T.self)
             .flatMap { _ in
                 networkManager.fetchModelDetail(T.self, id: id)
-                    .map { result in
+                    .filter { !$0.isLoading }
+                    .handleEvents(receiveOutput: { result in
                         switch result {
                         case .loaded(let model):
-                            let result = handleFetchedModel(model)
-                            switch result {
-                                case .success(let model):
-                                    return .loaded(model)
-                                case .failure(let error):
-                                    return .error(error)
-                            }
+                            handleFetchedModel(model)
                         case .error(let error):
                             switch error as? NetworkError {
                             case .modelNotFound:
@@ -146,23 +193,29 @@ struct ModelFetchProvider: ModelFetchProviding {
                                     T.self,
                                     where: idQuery(id)
                                 )
-                            case .none:
-                                break
+                            default:
+                                assertionFailure(error.localizedDescription)
                             }
-                            
-                            return .error(error)
                         case .loading:
                             assertionFailure("loading should only be prepended to initial stream")
-                            return .loading
+                        }
+                    })
+                    .flatMap { result in
+                        databaseUpdates.map { _ in
+                            if let loaded = freshModels(T.self, predicate: idQuery(id))?.first {
+                                return .loaded(loaded)
+                            } else {
+                                return .error(NetworkError.modelNotFound)
+                            }
                         }
                     }
             }
             .prepend(
                 {
                     if let loaded = freshModels(T.self, predicate: idQuery(id))?.first {
-                        .loaded(loaded)
+                        return .loaded(loaded)
                     } else {
-                        .loading
+                        return .loading
                     }
                 }()
             )
@@ -179,7 +232,7 @@ struct ModelFetchProvider: ModelFetchProviding {
             let models = freshModels(
                 T.self,
                 predicate: query?.localQuery,
-                sortedBy: sortDescriptors ?? defaultListSortDescriptor()
+                sortedBy: sortDescriptors
             ),
             let limit,
             models.count >= limit
@@ -251,6 +304,7 @@ struct ModelFetchProvider: ModelFetchProviding {
         }
     }
     
+    @discardableResult
     private func handleFetchedSingletonModel<T: SingletonModel>(_ model: T) -> Result<T, Error> {
         try? databaseManager.save(model)
         
@@ -266,6 +320,7 @@ struct ModelFetchProvider: ModelFetchProviding {
         }
     }
     
+    @discardableResult
     private func handleFetchedModel<T: BaseModel>(_ model: T) -> Result<T, Error> {
         try? databaseManager.save(model)
         
@@ -284,6 +339,7 @@ struct ModelFetchProvider: ModelFetchProviding {
         }
     }
     
+    @discardableResult
     private func handleFetchedList<T: ListModel>(_ models: [T], query: ModelQuery<T>?) -> Result<[T], Error> {
         do {
             var modelsToDelete = try databaseManager.fetch(
@@ -294,21 +350,22 @@ struct ModelFetchProvider: ModelFetchProviding {
             }
             
             for model in models {
-                try databaseManager.save(model)
-                modelsToDelete[model.id] = nil
+                modelsToDelete.removeValue(forKey: model.id)
             }
             
-            for model in modelsToDelete.values {
-                try databaseManager.delete(model)
-            }
+            try databaseManager.save(models)
+            
+            let models: [T] = modelsToDelete.values.map { $0 }
+            
+            try databaseManager.delete(models: models)
             
             // TODO: eventually allow sort descriptor to be passed in
             let cachedModels = try databaseManager.fetch(
                 T.self,
                 predicate: query?.localQuery,
                 sortedBy: [
-                    SortDescriptor(\T.index),
-                    SortDescriptor(\T.id) // use id to break ties
+//                    SortDescriptor(\T.index),
+//                    SortDescriptor(\T.id) // use id to break ties
                 ]
             )
                         
@@ -320,12 +377,5 @@ struct ModelFetchProvider: ModelFetchProviding {
     
     private func idQuery<T: BaseModel>(_ id: String) -> Predicate<T> {
         #Predicate { $0.id == id }
-    }
-    
-    private func defaultListSortDescriptor<T: ListModel>() -> [SortDescriptor<T>] {
-        [
-            SortDescriptor(\T.index),
-            SortDescriptor(\T.id) // use id to break ties
-        ]
     }
 }

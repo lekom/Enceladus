@@ -14,4 +14,8 @@ public struct ModelQuery<T: BaseModel>: QueryItemCombining {
     init(queryItems: [any QueryItem<T>]) {
         self.queryItems = queryItems
     }
+    
+    static func equals(_ keyPath: KeyPath<T, String>, _ value: String) -> ModelQuery<T> {
+        ModelQuery(queryItems: [EqualQueryItem(keyPath, value)])
+    }
 }

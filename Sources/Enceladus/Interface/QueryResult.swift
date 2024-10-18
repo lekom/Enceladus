@@ -21,6 +21,15 @@ public enum ModelQueryResult<M: BaseModel> {
             return nil
         }
     }
+    
+    public var isLoading: Bool {
+        switch self {
+        case .loading:
+            return true
+        case .loaded, .error:
+            return false
+        }
+    }
 }
 
 public enum ListModelQueryResult<M: ListModel> {
@@ -48,6 +57,15 @@ public enum ListModelQueryResult<M: ListModel> {
             return .loaded(Array(models.prefix(maxLength)))
         default:
             return self
+        }
+    }
+    
+    public var isLoading: Bool {
+        switch self {
+        case .loading:
+            return true
+        case .loaded, .error:
+            return false
         }
     }
 }
