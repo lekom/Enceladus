@@ -52,10 +52,10 @@ struct ModelFetchProvider: ModelFetchProviding {
             predicate: query?.localQuery,
             sortedBy: sortDescriptors
         )
-        
+                
         return freshCachedModels.combineLatest(timeTrigger(for: T.self))
             .flatMap { models, _ in
-                networkManager.fetchModelList(T.self, query: query)
+                return networkManager.fetchModelList(T.self, query: query)
                     .handleEvents(receiveOutput: { result in
                         Task {
                             switch result {
@@ -370,7 +370,8 @@ struct ModelFetchProvider: ModelFetchProviding {
                 $0[$1.id] = $1
             }
             
-            for model in models {
+            for (index, model) in models.enumerated() {
+                model.index = index
                 modelsToDelete.removeValue(forKey: model.id)
             }
             

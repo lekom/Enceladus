@@ -70,8 +70,6 @@ class NetworkManager: NetworkManaging {
             guard let items = itemsMap[T.nestedKey] else {
                 return .error(NetworkError.malformedListResponse)
             }
-            
-            items.enumerated().forEach { $1.index = $0 }
             return .loaded(items)
         }
         .catch { Just(.error($0)) }
