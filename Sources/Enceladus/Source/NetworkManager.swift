@@ -64,7 +64,9 @@ class NetworkManager: NetworkManaging {
                 )
             )
         )
-        .map { $0.data }
+        .map {
+            $0.data
+        }
         .decode(type: [String: [T]].self, decoder: JSONDecoder())
         .map { itemsMap in
             guard let items = itemsMap[T.nestedKey] else {

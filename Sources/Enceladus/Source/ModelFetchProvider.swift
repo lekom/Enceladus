@@ -47,17 +47,18 @@ struct ModelFetchProvider: ModelFetchProviding {
         
         let databaseUpdates = databaseManager.databaseUpdatePublisher.filter { $0.isRelevant(to: modelType) }
                 
-        let freshCachedModels: AnyPublisher<[T], Never> = freshModelsPublisher(
+        let cachedModels: AnyPublisher<[T], Never> = cachedModelsPublisher(
             T.self,
             predicate: query?.localQuery,
             sortedBy: sortDescriptors
-        )
+        ).eraseToAnyPublisher()
                 
         var isFirst = true
         
-        return freshCachedModels.combineLatest(timeTrigger(for: T.self))
+        return cachedModels.combineLatest(timeTrigger(for: T.self))
             .flatMap { models, _ in
-                let fetch: AnyPublisher<ListModelQueryResult<T>, Never> = networkManager.fetchModelList(T.self, query: query)
+                let fetch: AnyPublisher<ListModelQueryResult<T>, Never> = networkManager
+                    .fetchModelList(T.self, query: query)
                     .handleEvents(receiveOutput: { result in
                         Task {
                             switch result {
@@ -72,19 +73,19 @@ struct ModelFetchProvider: ModelFetchProviding {
                     })
                     .flatMap { _ in
                         databaseUpdates.flatMap { _ in
-                            Future { promise in
-                                Task {
-                                    if let loaded = try await freshModels(
-                                        T.self,
-                                        predicate: query?.localQuery,
-                                        sortedBy: sortDescriptors
-                                    ) {
-                                        promise(.success(.loaded(loaded)))
-                                    } else {
-                                        promise(.success(.loaded([])))
-                                    }
+                            let subject = PassthroughSubject<ListModelQueryResult<T>, Never>()
+                            Task {
+                                if let loaded = try await fetchCachedModels(
+                                    T.self,
+                                    predicate: query?.localQuery,
+                                    sortedBy: sortDescriptors
+                                ) {
+                                    subject.send(.loaded(loaded))
+                                } else {
+                                    subject.send(.loaded([]))
                                 }
                             }
+                            return subject.eraseToAnyPublisher()
                         }
                         .debounce(for: 0.05, scheduler: DispatchQueue.main)
                         .eraseToAnyPublisher()
@@ -105,11 +106,12 @@ struct ModelFetchProvider: ModelFetchProviding {
         
         let databaseUpdates = databaseManager.databaseUpdatePublisher.filter { $0.isRelevant(to: modelType) }
         
-        let freshCachedModels: AnyPublisher<[T], Never> = freshModelsPublisher(T.self)
+        let cachedModels: AnyPublisher<[T], Never> = cachedModelsPublisher(T.self)
+            .eraseToAnyPublisher()
         
         var isFirst = true
         
-        return freshCachedModels.combineLatest(timeTrigger(for: T.self))
+        return cachedModels.combineLatest(timeTrigger(for: T.self))
             .flatMap { cachedModels, _ in
                 
                 let fetch: AnyPublisher<ModelQueryResult<T>, Never> = networkManager.fetchModelDetail(T.self)
@@ -134,13 +136,15 @@ struct ModelFetchProvider: ModelFetchProviding {
                     })
                     .flatMap { result in
                         databaseUpdates.flatMap { _ in
-                            Future { promise in
-                                Task {
-                                    if let loaded = try? await freshModels(T.self)?.first {
-                                        promise(.success(.loaded(loaded)))
-                                    }
+                            let subject = PassthroughSubject<ModelQueryResult<T>, Never>()
+
+                            Task {
+                                if let loaded = try? await fetchCachedModels(T.self)?.first {
+                                    subject.send(.loaded(loaded))
                                 }
                             }
+                            
+                            return subject.eraseToAnyPublisher()
                         }
                         .debounce(for: 0.05, scheduler: DispatchQueue.main)
                     }
@@ -224,7 +228,7 @@ struct ModelFetchProvider: ModelFetchProviding {
                         databaseUpdates.flatMap { _ in
                             Future { promise in
                                 Task {
-                                    if let loaded = try await freshModels(T.self, predicate: idQuery(id))?.first {
+                                    if let loaded = try await fetchCachedModels(T.self, predicate: idQuery(id))?.first {
                                         promise(.success(.loaded(loaded)))
                                     }
                                 }
@@ -242,7 +246,7 @@ struct ModelFetchProvider: ModelFetchProviding {
         sortDescriptors: [SortDescriptor<T>]? = nil
     ) async -> Result<[T], Error> {
         if
-            let models = await freshModels(
+            let models = await fetchCachedModels(
                 T.self,
                 predicate: query?.localQuery,
                 sortedBy: sortDescriptors
@@ -257,7 +261,7 @@ struct ModelFetchProvider: ModelFetchProviding {
     }
     
     func getModel<T: BaseModel>(_ modelType: T.Type, id: String) async -> Result<T, Error> {
-        if let model = await freshModels(
+        if let model = await fetchCachedModels(
             T.self,
             predicate: idQuery(id)
         )?.first {
@@ -268,14 +272,14 @@ struct ModelFetchProvider: ModelFetchProviding {
     }
     
     func getModel<T: SingletonModel>(_ modelType: T.Type) async -> Result<T, Error> {
-        if let model = await freshModels(T.self)?.first {
+        if let model = await fetchCachedModels(T.self)?.first {
             return .success(model)
         } else {
             return await networkManager.fetchModelDetail(T.self)
         }
     }
     
-    private func freshModels<T: BaseModel>(
+    private func fetchCachedModels<T: BaseModel>(
         _ type: T.Type,
         predicate: Predicate<T>? = nil,
         sortedBy sortDescriptor: [SortDescriptor<T>]? = nil
@@ -291,38 +295,37 @@ struct ModelFetchProvider: ModelFetchProviding {
             return nil
         }
         
-        let freshModels = cachedModels.filter {
-            guard let cachedDate = $0.lastCachedDate else {
-                assertionFailure("model in cache without cache date set")
-                return false
-            }
-            return abs(cachedDate.timeIntervalSinceNow) < T.cacheDuration
-        }
+//        let cachedModels = cachedModels.filter {
+//            guard let cachedDate = $0.lastCachedDate else {
+//                assertionFailure("model in cache without cache date set")
+//                return false
+//            }
+//            return abs(cachedDate.timeIntervalSinceNow) < T.cacheDuration
+//        }
         
-        if freshModels.count > 0 {
-            return freshModels
+        if cachedModels.count > 0 {
+            return cachedModels
         } else {
             return nil
         }
     }
     
-    private func freshModelsPublisher<T: BaseModel>(
+    private func cachedModelsPublisher<T: BaseModel>(
         _ type: T.Type,
         predicate: Predicate<T>? = nil,
         sortedBy sortDescriptor: [SortDescriptor<T>]? = nil
-    ) -> AnyPublisher<[T], Never> {
+    ) -> Future<[T], Never> {
         Future { promise in
             Task {
-                if let freshModels = await freshModels(
+                let cachedModels = await fetchCachedModels(
                     T.self,
                     predicate: predicate,
                     sortedBy: sortDescriptor
-                ) {
-                    promise(.success(freshModels))
-                }
+                )
+                
+                promise(.success(cachedModels ?? []))
             }
         }
-        .eraseToAnyPublisher()
     }
     
     private func timeTrigger<T: BaseModel>(for type: T.Type) -> AnyPublisher<Date, Never> {
