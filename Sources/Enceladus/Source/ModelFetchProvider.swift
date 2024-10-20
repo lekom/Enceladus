@@ -53,9 +53,11 @@ struct ModelFetchProvider: ModelFetchProviding {
             sortedBy: sortDescriptors
         )
                 
+        var isFirst = true
+        
         return freshCachedModels.combineLatest(timeTrigger(for: T.self))
             .flatMap { models, _ in
-                return networkManager.fetchModelList(T.self, query: query)
+                let fetch: AnyPublisher<ListModelQueryResult<T>, Never> = networkManager.fetchModelList(T.self, query: query)
                     .handleEvents(receiveOutput: { result in
                         Task {
                             switch result {
@@ -87,7 +89,14 @@ struct ModelFetchProvider: ModelFetchProviding {
                         .debounce(for: 0.05, scheduler: DispatchQueue.main)
                         .eraseToAnyPublisher()
                     }
-                    .prepend(.loaded(models))
+                    .eraseToAnyPublisher()
+
+                if isFirst {
+                    isFirst = false
+                    return fetch.prepend(.loaded(models)).eraseToAnyPublisher()
+                } else {
+                    return fetch.eraseToAnyPublisher()
+                }
             }
             .eraseToAnyPublisher()
     }
@@ -98,9 +107,12 @@ struct ModelFetchProvider: ModelFetchProviding {
         
         let freshCachedModels: AnyPublisher<[T], Never> = freshModelsPublisher(T.self)
         
+        var isFirst = true
+        
         return freshCachedModels.combineLatest(timeTrigger(for: T.self))
             .flatMap { cachedModels, _ in
-                networkManager.fetchModelDetail(T.self)
+                
+                let fetch: AnyPublisher<ModelQueryResult<T>, Never> = networkManager.fetchModelDetail(T.self)
                     .handleEvents(receiveOutput: { result in
                         Task {
                             switch result {
@@ -132,15 +144,14 @@ struct ModelFetchProvider: ModelFetchProviding {
                         }
                         .debounce(for: 0.05, scheduler: DispatchQueue.main)
                     }
-                    .prepend(
-                        {
-                            if let first = cachedModels.first {
-                                return .loaded(first)
-                            } else {
-                                return .loading
-                            }
-                        }()
-                    )
+                    .eraseToAnyPublisher()
+                
+                if isFirst, let firstCachedModel = cachedModels.first {
+                    isFirst = false
+                    return fetch.prepend(.loaded(firstCachedModel)).eraseToAnyPublisher()
+                } else {
+                    return fetch.eraseToAnyPublisher()
+                }
             }
             .eraseToAnyPublisher()
     }
