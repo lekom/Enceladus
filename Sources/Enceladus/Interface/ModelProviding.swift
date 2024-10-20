@@ -7,6 +7,7 @@
 
 import Combine
 import Foundation
+import SwiftData
 
 /// Provides models from cache and network, either streamed or single fetches
 public protocol ModelProviding {
@@ -94,7 +95,7 @@ public protocol ModelProviding {
     /// - Parameters:
     ///  - headersProvider: A closure that will be called on every network request to provide headers
     func configure(
-        modelTypes: [any BaseModel.Type],
+        modelContainer: ModelContainer,
         headersProvider: (() -> [String: String])?
     )
 }

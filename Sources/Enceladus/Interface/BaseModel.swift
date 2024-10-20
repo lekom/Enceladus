@@ -21,6 +21,10 @@ public protocol BaseModel: Equatable, Identifiable, Codable, PersistentModel {
     
     /// Explicit equality
     static func isEqual(lhs: Self, rhs: Self) -> Bool
+    
+    static var configuration: ModelConfiguration { get }
+    
+    static var typeName: String { get }
 }
 
 public extension BaseModel {
@@ -31,6 +35,14 @@ public extension BaseModel {
     
     static func == (lhs: Self, rhs: Self) -> Bool {
         Self.isEqual(lhs: lhs, rhs: rhs)
+    }
+    
+    static var typeName: String {
+        String(describing: Self.self)
+    }
+    
+    static var configuration: ModelConfiguration {
+        ModelConfiguration(typeName)
     }
 }
 

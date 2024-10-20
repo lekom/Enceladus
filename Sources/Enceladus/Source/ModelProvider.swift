@@ -7,6 +7,7 @@
 
 import Combine
 import Foundation
+import SwiftData
 
 struct ModelProvider: ModelProviding {
 
@@ -15,12 +16,12 @@ struct ModelProvider: ModelProviding {
         networkManager: NetworkManager()
     )
     
-    private let databaseManager: DatabaseManaging
+    private let databaseManager: DatabaseManager
     private let networkManager: NetworkManaging
     private let fetchProvider: ModelFetchProviding
     private let streamManager: MultiStreamManaging
     
-    init(databaseManager: DatabaseManaging, networkManager: NetworkManaging) {
+    init(databaseManager: DatabaseManager, networkManager: NetworkManaging) {
         self.databaseManager = databaseManager
         self.networkManager = networkManager
         let fetchProvider = ModelFetchProvider(
@@ -118,11 +119,11 @@ struct ModelProvider: ModelProviding {
     }
     
     func configure(
-        modelTypes: [any BaseModel.Type],
+        modelContainer: ModelContainer,
         headersProvider: (() -> [String : String])?
     ) {
-        for modelType in modelTypes {
-            databaseManager.register(modelType)
+        Task {
+            await databaseManager.register(modelContainer: modelContainer)
         }
         networkManager.configureHeadersProvider(headersProvider)
     }

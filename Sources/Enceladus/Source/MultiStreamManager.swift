@@ -114,6 +114,9 @@ class MultiStreamManager: MultiStreamManaging {
         limit: Int?,
         sortDescriptors: [SortDescriptor<T>]?
     ) -> AnyPublisher<ListModelQueryResult<T>, Never> {
+        
+        assert(Thread.isMainThread)
+        
         let key = StreamKey(
             model: ModelWrapper(type),
             type: .list(limit: limit, sortDescriptors: sortDescriptors),

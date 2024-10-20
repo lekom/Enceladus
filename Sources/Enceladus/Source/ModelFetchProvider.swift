@@ -36,7 +36,7 @@ protocol ModelFetchProviding {
 /// Manages the fetching of local and remote data as well as updating local data with remote data
 struct ModelFetchProvider: ModelFetchProviding {
     
-    let databaseManager: DatabaseManaging
+    let databaseManager: DatabaseManager
     let networkManager: NetworkManaging
     
     func streamList<T>(
@@ -46,48 +46,49 @@ struct ModelFetchProvider: ModelFetchProviding {
     ) -> AnyPublisher<ListModelQueryResult<T>, Never> {
         
         let databaseUpdates = databaseManager.databaseUpdatePublisher.filter { $0.isRelevant(to: modelType) }
+                
+        let freshCachedModels: AnyPublisher<[T], Never> = freshModelsPublisher(
+            T.self,
+            predicate: query?.localQuery,
+            sortedBy: sortDescriptors
+        )
         
-        return timeTrigger(for: T.self)
-            .flatMap { _ in
+        return freshCachedModels.combineLatest(timeTrigger(for: T.self))
+            .flatMap { models, _ in
                 networkManager.fetchModelList(T.self, query: query)
                     .handleEvents(receiveOutput: { result in
-                        switch result {
-                        case .loaded(let models):
-                            handleFetchedList(models, query: query)
-                        case .error(let error):
-                            assertionFailure(error.localizedDescription)
-                        case .loading:
-                            assertionFailure("should not be loading")
+                        Task {
+                            switch result {
+                            case .loaded(let models):
+                                await handleFetchedList(models, query: query)
+                            case .error(let error):
+                                assertionFailure(error.localizedDescription)
+                            case .loading:
+                                assertionFailure("should not be loading")
+                            }
                         }
                     })
                     .flatMap { _ in
-                        return databaseUpdates.map { _ in
-                            if let loaded = freshModels(
-                                T.self,
-                                predicate: query?.localQuery,
-                                sortedBy: sortDescriptors
-                            ) {
-                                return .loaded(loaded)
-                            } else {
-                                return .loaded([])
+                        databaseUpdates.flatMap { _ in
+                            Future { promise in
+                                Task {
+                                    if let loaded = try await freshModels(
+                                        T.self,
+                                        predicate: query?.localQuery,
+                                        sortedBy: sortDescriptors
+                                    ) {
+                                        promise(.success(.loaded(loaded)))
+                                    } else {
+                                        promise(.success(.loaded([])))
+                                    }
+                                }
                             }
                         }
                         .debounce(for: 0.05, scheduler: DispatchQueue.main)
+                        .eraseToAnyPublisher()
                     }
+                    .prepend(.loaded(models))
             }
-            .prepend(
-                {
-                    if let loaded = freshModels(
-                        T.self,
-                        predicate: query?.localQuery,
-                        sortedBy: sortDescriptors
-                    ) {
-                        .loaded(loaded)
-                    } else {
-                        .loading
-                    }
-                }()
-            )
             .eraseToAnyPublisher()
     }
     
@@ -95,46 +96,52 @@ struct ModelFetchProvider: ModelFetchProviding {
         
         let databaseUpdates = databaseManager.databaseUpdatePublisher.filter { $0.isRelevant(to: modelType) }
         
-        return timeTrigger(for: T.self)
-            .flatMap { _ in
+        let freshCachedModels: AnyPublisher<[T], Never> = freshModelsPublisher(T.self)
+        
+        return freshCachedModels.combineLatest(timeTrigger(for: T.self))
+            .flatMap { cachedModels, _ in
                 networkManager.fetchModelDetail(T.self)
                     .handleEvents(receiveOutput: { result in
-                        switch result {
-                        case .loaded(let model):
-                            handleFetchedSingletonModel(model)
-                        case .error(let error):
-                            switch error as? NetworkError {
-                            case .modelNotFound:
-                                try? databaseManager.deleteAll(
-                                    T.self
-                                )
-                            default:
-                                break
+                        Task {
+                            switch result {
+                            case .loaded(let model):
+                                await handleFetchedSingletonModel(model)
+                            case .error(let error):
+                                switch error as? NetworkError {
+                                case .modelNotFound:
+                                    try? databaseManager.deleteAll(
+                                        T.self
+                                    )
+                                default:
+                                    break
+                                }
+                            case .loading:
+                                assertionFailure("loading should only be prepended to initial stream")
                             }
-                        case .loading:
-                            assertionFailure("loading should only be prepended to initial stream")
                         }
                     })
                     .flatMap { result in
-                        databaseUpdates.map { _ in
-                            if let loaded = freshModels(T.self)?.first {
-                                return .loaded(loaded)
-                            } else {
-                                return .error(NetworkError.modelNotFound)
+                        databaseUpdates.flatMap { _ in
+                            Future { promise in
+                                Task {
+                                    if let loaded = try? await freshModels(T.self)?.first {
+                                        promise(.success(.loaded(loaded)))
+                                    }
+                                }
                             }
                         }
                         .debounce(for: 0.05, scheduler: DispatchQueue.main)
                     }
+                    .prepend(
+                        {
+                            if let first = cachedModels.first {
+                                return .loaded(first)
+                            } else {
+                                return .loading
+                            }
+                        }()
+                    )
             }
-            .prepend(
-                {
-                    if let loaded = freshModels(T.self)?.first {
-                        .loaded(loaded)
-                    } else {
-                        .loading
-                    }
-                }()
-            )
             .eraseToAnyPublisher()
     }
     
@@ -183,42 +190,37 @@ struct ModelFetchProvider: ModelFetchProviding {
                 networkManager.fetchModelDetail(T.self, id: id)
                     .filter { !$0.isLoading }
                     .handleEvents(receiveOutput: { result in
-                        switch result {
-                        case .loaded(let model):
-                            handleFetchedModel(model)
-                        case .error(let error):
-                            switch error as? NetworkError {
-                            case .modelNotFound:
-                                try? databaseManager.delete(
-                                    T.self,
-                                    where: idQuery(id)
-                                )
-                            default:
-                                assertionFailure(error.localizedDescription)
+                        Task {
+                            switch result {
+                            case .loaded(let model):
+                                await handleFetchedModel(model)
+                            case .error(let error):
+                                switch error as? NetworkError {
+                                case .modelNotFound:
+                                    try? databaseManager.delete(
+                                        T.self,
+                                        where: idQuery(id)
+                                    )
+                                default:
+                                    assertionFailure(error.localizedDescription)
+                                }
+                            case .loading:
+                                assertionFailure("loading should only be prepended to initial stream")
                             }
-                        case .loading:
-                            assertionFailure("loading should only be prepended to initial stream")
                         }
                     })
                     .flatMap { result in
-                        databaseUpdates.map { _ in
-                            if let loaded = freshModels(T.self, predicate: idQuery(id))?.first {
-                                return .loaded(loaded)
-                            } else {
-                                return .error(NetworkError.modelNotFound)
+                        databaseUpdates.flatMap { _ in
+                            Future { promise in
+                                Task {
+                                    if let loaded = try await freshModels(T.self, predicate: idQuery(id))?.first {
+                                        promise(.success(.loaded(loaded)))
+                                    }
+                                }
                             }
                         }
                     }
             }
-            .prepend(
-                {
-                    if let loaded = freshModels(T.self, predicate: idQuery(id))?.first {
-                        return .loaded(loaded)
-                    } else {
-                        return .loading
-                    }
-                }()
-            )
             .eraseToAnyPublisher()
     }
     
@@ -229,7 +231,7 @@ struct ModelFetchProvider: ModelFetchProviding {
         sortDescriptors: [SortDescriptor<T>]? = nil
     ) async -> Result<[T], Error> {
         if
-            let models = freshModels(
+            let models = await freshModels(
                 T.self,
                 predicate: query?.localQuery,
                 sortedBy: sortDescriptors
@@ -244,7 +246,7 @@ struct ModelFetchProvider: ModelFetchProviding {
     }
     
     func getModel<T: BaseModel>(_ modelType: T.Type, id: String) async -> Result<T, Error> {
-        if let model = freshModels(
+        if let model = await freshModels(
             T.self,
             predicate: idQuery(id)
         )?.first {
@@ -255,7 +257,7 @@ struct ModelFetchProvider: ModelFetchProviding {
     }
     
     func getModel<T: SingletonModel>(_ modelType: T.Type) async -> Result<T, Error> {
-        if let model = freshModels(T.self)?.first {
+        if let model = await freshModels(T.self)?.first {
             return .success(model)
         } else {
             return await networkManager.fetchModelDetail(T.self)
@@ -266,9 +268,9 @@ struct ModelFetchProvider: ModelFetchProviding {
         _ type: T.Type,
         predicate: Predicate<T>? = nil,
         sortedBy sortDescriptor: [SortDescriptor<T>]? = nil
-    ) -> [T]? {
+    ) async -> [T]? {
         guard
-            let cachedModels = try? databaseManager.fetch(
+            let cachedModels = try? await databaseManager.fetch(
                 T.self,
                 predicate: predicate,
                 sortedBy: sortDescriptor
@@ -293,6 +295,25 @@ struct ModelFetchProvider: ModelFetchProviding {
         }
     }
     
+    private func freshModelsPublisher<T: BaseModel>(
+        _ type: T.Type,
+        predicate: Predicate<T>? = nil,
+        sortedBy sortDescriptor: [SortDescriptor<T>]? = nil
+    ) -> AnyPublisher<[T], Never> {
+        Future { promise in
+            Task {
+                if let freshModels = await freshModels(
+                    T.self,
+                    predicate: predicate,
+                    sortedBy: sortDescriptor
+                ) {
+                    promise(.success(freshModels))
+                }
+            }
+        }
+        .eraseToAnyPublisher()
+    }
+    
     private func timeTrigger<T: BaseModel>(for type: T.Type) -> AnyPublisher<Date, Never> {
         if let T = T.self as? PollableModel.Type {
             return Timer.publish(every: T.pollingInterval, on: .main, in: .common)
@@ -305,11 +326,11 @@ struct ModelFetchProvider: ModelFetchProviding {
     }
     
     @discardableResult
-    private func handleFetchedSingletonModel<T: SingletonModel>(_ model: T) -> Result<T, Error> {
+    private func handleFetchedSingletonModel<T: SingletonModel>(_ model: T) async -> Result<T, Error> {
         try? databaseManager.save(model)
         
         do {
-            let cachedModels = try databaseManager.fetch(T.self)
+            let cachedModels = try await databaseManager.fetch(T.self)
             if let first = cachedModels.first {
                 return .success(first)
             } else {
@@ -321,11 +342,11 @@ struct ModelFetchProvider: ModelFetchProviding {
     }
     
     @discardableResult
-    private func handleFetchedModel<T: BaseModel>(_ model: T) -> Result<T, Error> {
+    private func handleFetchedModel<T: BaseModel>(_ model: T) async -> Result<T, Error> {
         try? databaseManager.save(model)
         
         do {
-            let cachedModels = try databaseManager.fetch(
+            let cachedModels = try await databaseManager.fetch(
                 T.self,
                 predicate: idQuery(model.id)
             )
@@ -340,9 +361,9 @@ struct ModelFetchProvider: ModelFetchProviding {
     }
     
     @discardableResult
-    private func handleFetchedList<T: ListModel>(_ models: [T], query: ModelQuery<T>?) -> Result<[T], Error> {
+    private func handleFetchedList<T: ListModel>(_ models: [T], query: ModelQuery<T>?) async -> Result<[T], Error> {
         do {
-            var modelsToDelete = try databaseManager.fetch(
+            var modelsToDelete = try await databaseManager.fetch(
                 T.self,
                 predicate: query?.localQuery
             ).reduce(into: [:]) {
@@ -360,7 +381,7 @@ struct ModelFetchProvider: ModelFetchProviding {
             try databaseManager.delete(models: models)
             
             // TODO: eventually allow sort descriptor to be passed in
-            let cachedModels = try databaseManager.fetch(
+            let cachedModels = try await databaseManager.fetch(
                 T.self,
                 predicate: query?.localQuery,
                 sortedBy: [

@@ -15,15 +15,27 @@ protocol DatabaseManaging {
         _ modelType: T.Type,
         predicate: Predicate<T>?,
         sortedBy sortDescriptor: [SortDescriptor<T>]?
-    ) throws -> [T]
+    ) async throws -> [T]
+    
+    func fetch<T: BaseModel>(
+        _ modelType: T.Type,
+        predicate: Predicate<T>?,
+        sortedBy sortDescriptor: [SortDescriptor<T>]?
+    ) -> AnyPublisher<[T], Never>
     
     func fetch<T: ListModel>(
         _ modelType: T.Type,
         predicate: Predicate<T>?,
         sortedBy sortDescriptor: [SortDescriptor<T>]?
-    ) throws -> [T]
+    ) async throws -> [T]
     
-    func register(_ modelType: any BaseModel.Type)
+    func fetch<T: ListModel>(
+        _ modelType: T.Type,
+        predicate: Predicate<T>?,
+        sortedBy sortDescriptor: [SortDescriptor<T>]?
+    ) -> AnyPublisher<[T], Never>
+    
+    func register(modelContainer: ModelContainer)
     
     func save<T: BaseModel>(_ models: [T]) throws 
     func save(_ model: any BaseModel) throws
@@ -42,14 +54,50 @@ extension DatabaseManaging {
     func fetch<T: BaseModel>(
         _ modelType: T.Type,
         predicate: Predicate<T>?
-    ) throws -> [T] {
-        try fetch(modelType, predicate: predicate, sortedBy: nil)
+    ) async throws -> [T] {
+        try await fetch(modelType, predicate: predicate, sortedBy: nil)
+    }
+    
+    func fetch<T: BaseModel>(
+        _ modelType: T.Type,
+        predicate: Predicate<T>?,
+        sortedBy sortDescriptor: [SortDescriptor<T>]?
+    ) -> AnyPublisher<[T], Never> {
+        Future { promise in
+            Task {
+                do {
+                    let result = try await fetch(modelType, predicate: predicate, sortedBy: sortDescriptor)
+                    promise(.success(result))
+                } catch {
+                    assertionFailure("Failed to fetch models: \(error)")
+                }
+            }
+        }
+        .eraseToAnyPublisher()
     }
     
     func fetch<T: BaseModel>(
         _ modelType: T.Type
-    ) throws -> [T] {
-        try fetch(modelType, predicate: nil)
+    ) async throws -> [T] {
+        try await fetch(modelType, predicate: nil)
+    }
+    
+    func fetch<T: ListModel>(
+        _ modelType: T.Type,
+        predicate: Predicate<T>?,
+        sortedBy sortDescriptor: [SortDescriptor<T>]?
+    ) -> AnyPublisher<[T], Never> {
+        Future { promise in
+            Task {
+                do {
+                    let result = try await fetch(modelType, predicate: predicate, sortedBy: sortDescriptor)
+                    promise(.success(result))
+                } catch {
+                    assertionFailure("Failed to fetch models: \(error)")
+                }
+            }
+        }
+        .eraseToAnyPublisher()
     }
     
     func delete<T: BaseModel>(_ model: T) throws {
@@ -82,30 +130,17 @@ enum DatabaseUpdate {
 
 class DatabaseManager: DatabaseManaging {
         
-    private var modelContexts: [ModelWrapper: ModelContext] = [:]
+    private var database: BaseModelActor!
     
     private let databaseUpdatePublishSubject = PassthroughSubject<DatabaseUpdate, Never>()
         
     var databaseUpdatePublisher: AnyPublisher<DatabaseUpdate, Never> {
         databaseUpdatePublishSubject.eraseToAnyPublisher()
     }
-        
-    init(
-        models: [any BaseModel.Type] = [],
-        configuration: ModelConfiguration? = nil
-    ) {
-        do {
-            for model in models {
-                try createAndStoreModelContainer(for: model, configuration: configuration)
-            }
-        } catch {
-            assertionFailure("Failed to create model container: \(error)")
-        }
-    }
     
-    func register(_ modelType: any BaseModel.Type) {
+    func register(modelContainer: ModelContainer) {
         do {
-            try createAndStoreModelContainer(for: modelType, configuration: nil)
+            try createAndStoreModelActor(for: modelContainer)
         } catch {
             assertionFailure("Failed to create model container: \(error)")
         }
@@ -115,32 +150,26 @@ class DatabaseManager: DatabaseManaging {
         _ modelType: T.Type,
         predicate: Predicate<T>? = nil,
         sortedBy sortDescriptor: [SortDescriptor<T>]? = nil
-    ) throws -> [T] {
-        
-        let context = modelContext(for: T.self)
-        
-        let fetchDescriptor = FetchDescriptor<T>(
+    ) async throws -> [T] {
+                
+        return try await database.fetch(
+            T.self,
             predicate: predicate,
-            sortBy: sortDescriptor ?? []
+            sortedBy: sortDescriptor
         )
-        
-        return try context.fetch(fetchDescriptor)
     }
     
     func fetch<T: ListModel>(
         _ modelType: T.Type,
         predicate: Predicate<T>? = nil,
         sortedBy sortDescriptor: [SortDescriptor<T>]? = nil
-    ) throws -> [T] {
-        
-        let context = modelContext(for: T.self)
-        
-        let fetchDescriptor = FetchDescriptor<T>(
+    ) async throws -> [T] {
+            
+        return try await database.fetch(
+            T.self,
             predicate: predicate,
-            sortBy: sortDescriptor ?? []
+            sortedBy: sortDescriptor
         )
-        
-        return try context.fetch(fetchDescriptor)
     }
     
     private func defaultListSortDescriptor<T: ListModel>() -> [SortDescriptor<T>] {
@@ -151,102 +180,148 @@ class DatabaseManager: DatabaseManaging {
     }
     
     func save<T: BaseModel>(_ models: [T]) throws {
-        let context = modelContext(for: T.self)
         
-        for model in models {
-            model.lastCachedDate = .now
-            context.insert(model)
+        Task {
+            try await database.save(models)
+            
+            databaseUpdatePublishSubject.send(.modelsUpdated(models))
         }
-                    
-        try context.save()
-        
-        databaseUpdatePublishSubject.send(.modelsUpdated(models))
     }
     
     func save(_ model: any BaseModel) throws {
-        
-        let context = modelContext(for: type(of: model))
-        context.insert(model)
-        
-        model.lastCachedDate = .now
-        
-        try context.save()
-        
-        databaseUpdatePublishSubject.send(.modelUpdated(model))
+                
+        Task {
+            try await database.save(model)
+            
+            databaseUpdatePublishSubject.send(.modelUpdated(model))
+        }
     }
     
     func delete<T: BaseModel>(
         models: [T]
     ) throws {
-        let context = modelContext(for: T.self)
-                
-        for model in models {
-            context.delete(model)
+             
+        Task {
+            try await database.delete(models: models)
+            
+            databaseUpdatePublishSubject.send(.modelsDeleted(models))
         }
-        
-        try context.save()
-        
-        databaseUpdatePublishSubject.send(.modelsDeleted(models))
     }
     
     func delete<T: BaseModel>(
         _ modelType: T.Type,
         where predicate: Predicate<T>
     ) throws {
-        
-        let context = modelContext(for: T.self)
-        
-        let objectsToDelete = try fetch(T.self, predicate: predicate)
-        
-        for object in objectsToDelete {
-            context.delete(object)
+                
+        Task {
+            let objectsToDelete = try await database.fetch(T.self, predicate: predicate)
+            
+            try await database.delete(modelType, where: predicate)
+            
+            databaseUpdatePublishSubject.send(.modelsDeleted(objectsToDelete))
         }
-        
-        try context.save()
-        
-        databaseUpdatePublishSubject.send(.modelsDeleted(objectsToDelete))
     }
     
     func deleteAll<T: BaseModel>(_ modelType: T.Type) throws {
-        let context = modelContext(for: T.self)
         
-        try context.delete(model: T.self)
-        
-        try context.save()
-        
-        databaseUpdatePublishSubject.send(.allModelsDeleted(T.self))
-    }
-    
-    // MARK: Model Container Access
-    
-    private func modelContext(for model: any BaseModel.Type) -> ModelContext {
-    
-        guard let context = modelContexts[ModelWrapper(model)] else {
-            fatalError("Model container not found for \(model)")
+        Task {
+            try await database.deleteAll(modelType)
+                        
+            databaseUpdatePublishSubject.send(.allModelsDeleted(T.self))
         }
-        return context
     }
     
     // MARK: - Initialization of model containers (only done once at app launch)
     
     @discardableResult
-    private func createAndStoreModelContainer(
-        for model: any BaseModel.Type,
-        configuration: ModelConfiguration?
-    ) throws -> ModelContainer {
-        if let configuration {
-            let container = try ModelContainer(for: model, configurations: configuration)
-            setModelContainer(container, for: model)
-            return container
-        } else {
-            let container = try ModelContainer(for: model)
-            setModelContainer(container, for: model)
-            return container
+    private func createAndStoreModelActor(
+        for modelContainer: ModelContainer
+    ) {
+                
+        database = try BaseModelActor(
+            modelContainer: modelContainer
+        )
+    }
+}
+
+@ModelActor
+actor BaseModelActor {
+        
+    func save<T: BaseModel>(_ models: [T]) throws {
+        for model in models {
+            model.lastCachedDate = .now
+            modelContext.insert(model)
         }
+                    
+        try modelContext.save()
     }
     
-    private func setModelContainer(_ container: ModelContainer, for model: any BaseModel.Type) {
-        let context = ModelContext(container)
-        modelContexts[ModelWrapper(model)] = context
+    func save(_ model: any BaseModel) throws {
+        
+        modelContext.insert(model)
+        
+        model.lastCachedDate = .now
+        
+        try modelContext.save()
+    }
+    
+    func delete<T: BaseModel>(
+        models: [T]
+    ) throws {
+                
+        for model in models {
+            modelContext.delete(model)
+        }
+        
+        try modelContext.save()
+    }
+    
+    func delete<T: BaseModel>(
+        _ modelType: T.Type,
+        where predicate: Predicate<T>
+    ) throws {
+                
+        let objectsToDelete = try fetch(T.self, predicate: predicate)
+        
+        for object in objectsToDelete {
+            modelContext.delete(object)
+        }
+        
+        try modelContext.save()
+    }
+    
+    func deleteAll<T: BaseModel>(_ modelType: T.Type) throws {
+        
+        try modelContext.delete(model: T.self)
+        
+        try modelContext.save()
+    }
+    
+    func fetch<T: BaseModel>(
+        _ modelType: T.Type,
+        predicate: Predicate<T>? = nil,
+        sortedBy sortDescriptor: [SortDescriptor<T>]? = nil
+    ) throws -> [T] {
+                
+        let fetchDescriptor = FetchDescriptor<T>(
+            predicate: predicate,
+            sortBy: sortDescriptor ?? []
+        )
+        
+        return try modelContext.fetch(fetchDescriptor)
+    }
+    
+    func fetch<T: ListModel>(
+        _ modelType: T.Type,
+        predicate: Predicate<T>? = nil,
+        sortedBy sortDescriptor: [SortDescriptor<T>]? = nil
+    ) throws -> [T] {
+                
+        let fetchDescriptor = FetchDescriptor<T>(
+            predicate: predicate,
+            sortBy: sortDescriptor ?? []
+        )
+        
+        return try modelContext.fetch(fetchDescriptor)
     }
 }
