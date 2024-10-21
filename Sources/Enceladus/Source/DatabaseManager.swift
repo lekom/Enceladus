@@ -63,17 +63,17 @@ extension DatabaseManaging {
         predicate: Predicate<T>?,
         sortedBy sortDescriptor: [SortDescriptor<T>]?
     ) -> AnyPublisher<[T], Never> {
-        Future { promise in
-            Task {
-                do {
-                    let result = try await fetch(modelType, predicate: predicate, sortedBy: sortDescriptor)
-                    promise(.success(result))
-                } catch {
-                    assertionFailure("Failed to fetch models: \(error)")
-                }
+        let subject = PassthroughSubject<[T], Never>()
+        Task {
+            do {
+                let result = try await fetch(modelType, predicate: predicate, sortedBy: sortDescriptor)
+                subject.send(result)
+            } catch {
+                subject.send([])
+                assertionFailure("Failed to fetch models: \(error)")
             }
         }
-        .eraseToAnyPublisher()
+        return subject.eraseToAnyPublisher()
     }
     
     func fetch<T: BaseModel>(
@@ -87,17 +87,17 @@ extension DatabaseManaging {
         predicate: Predicate<T>?,
         sortedBy sortDescriptor: [SortDescriptor<T>]?
     ) -> AnyPublisher<[T], Never> {
-        Future { promise in
-            Task {
-                do {
-                    let result = try await fetch(modelType, predicate: predicate, sortedBy: sortDescriptor)
-                    promise(.success(result))
-                } catch {
-                    assertionFailure("Failed to fetch models: \(error)")
-                }
+        let subject = PassthroughSubject<[T], Never>()
+        Task {
+            do {
+                let result = try await fetch(modelType, predicate: predicate, sortedBy: sortDescriptor)
+                subject.send(result)
+            } catch {
+                subject.send([])
+                assertionFailure("Failed to fetch models: \(error)")
             }
         }
-        .eraseToAnyPublisher()
+        return subject.eraseToAnyPublisher()
     }
     
     func delete<T: BaseModel>(_ model: T) throws {

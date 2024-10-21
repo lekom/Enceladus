@@ -194,7 +194,13 @@ class MultiStreamManager: MultiStreamManaging {
                 return result
             }
             .handleEvents(
+                receiveCompletion: {_ in 
+                    print("[encel] completed \(T.typeName)")
+                },
                 receiveCancel: { [weak self] in
+                    
+                    print("[encel] canceled \(T.typeName)")
+                    
                     guard let self = self else { return }
                     queue.sync {
                         assert((self.subscriberCounts[key] ?? 0) > 0, "should not get cancel if no subscribers")
