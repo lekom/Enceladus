@@ -197,11 +197,19 @@ struct ModelFetchProvider: ModelFetchProviding {
             }
         }
         
+        let cachedModel: AnyPublisher<T?, Never> = cachedModelsPublisher(
+            T.self,
+            predicate: idQuery(id),
+            sortedBy: nil
+        ).map { $0.first }.eraseToAnyPublisher()
+                
+        var isFirst = true
+        
         let databaseUpdates = databaseManager.databaseUpdatePublisher.filter { $0.isRelevant(to: modelType, id: id) }
         
-        return timeTrigger(for: T.self)
-            .flatMap { _ in
-                networkManager.fetchModelDetail(T.self, id: id)
+        return cachedModel.combineLatest(timeTrigger(for: T.self))
+            .flatMap { cachedModel, _ in
+                let fetch = networkManager.fetchModelDetail(T.self, id: id)
                     .filter { !$0.isLoading }
                     .handleEvents(receiveOutput: { result in
                         Task {
@@ -234,6 +242,13 @@ struct ModelFetchProvider: ModelFetchProviding {
                             return publisher.eraseToAnyPublisher()
                         }
                     }
+                
+                if isFirst, let cachedModel {
+                    isFirst = false
+                    return fetch.prepend(.loaded(cachedModel)).eraseToAnyPublisher()
+                } else {
+                    return fetch.eraseToAnyPublisher()
+                }
             }
             .eraseToAnyPublisher()
     }
@@ -293,14 +308,6 @@ struct ModelFetchProvider: ModelFetchProviding {
         else {
             return nil
         }
-        
-//        let cachedModels = cachedModels.filter {
-//            guard let cachedDate = $0.lastCachedDate else {
-//                assertionFailure("model in cache without cache date set")
-//                return false
-//            }
-//            return abs(cachedDate.timeIntervalSinceNow) < T.cacheDuration
-//        }
         
         if cachedModels.count > 0 {
             return cachedModels
@@ -413,6 +420,6 @@ struct ModelFetchProvider: ModelFetchProviding {
     }
     
     private func idQuery<T: BaseModel>(_ id: String) -> Predicate<T> {
-        #Predicate { $0.id == id }
+        EqualQueryItem(T.idKeyPath, id).localQuery
     }
 }

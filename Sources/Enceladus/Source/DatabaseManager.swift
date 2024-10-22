@@ -101,7 +101,10 @@ extension DatabaseManaging {
     }
     
     func delete<T: BaseModel>(_ model: T) throws {
-        try delete(T.self, where: #Predicate { $0.id == model.id })
+        try delete(
+            T.self,
+            where: EqualQueryItem(T.idKeyPath, model.id).localQuery
+        )
     }
 }
 

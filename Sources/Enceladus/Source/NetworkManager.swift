@@ -69,7 +69,7 @@ class NetworkManager: NetworkManaging {
         }
         .decode(type: [String: [T]].self, decoder: JSONDecoder())
         .map { itemsMap in
-            guard let items = itemsMap[T.nestedKey] else {
+            guard let items = itemsMap[T.nestedListKey] else {
                 return .error(NetworkError.malformedListResponse)
             }
             return .loaded(items)
@@ -86,8 +86,12 @@ class NetworkManager: NetworkManaging {
     
     private func fetchModelDetail<T: BaseModel>(_ model: T.Type, urlQueryItems: [URLQueryItem]?) async -> Result<T, Error> {
         
-        guard let detailUrl = T.detail?.url else {
+        guard var detailUrl = T.detail?.url else {
             return .failure(NetworkError.detailUrlMissing)
+        }
+        
+        if let T = T.self as? DetailPathRewritable.Type {
+            detailUrl = rewritePath(for: T.self, detailUrl: detailUrl, urlQueryItems: urlQueryItems)
         }
         
         do {
@@ -109,22 +113,79 @@ class NetworkManager: NetworkManaging {
         urlQueryItems: [URLQueryItem]?
     ) -> AnyPublisher<ModelQueryResult<T>, Never> {
         
-        guard let detailUrl = T.detail?.url else {
+        guard var detailUrl = T.detail?.url else {
             return Just(.error(NetworkError.detailUrlMissing)).eraseToAnyPublisher()
         }
         
-        return URLSession.shared.dataTaskPublisher(
-            for: urlRequest(
-                for: detailUrl.appending(
-                    queryItems: urlQueryItems ?? []
-                )
-            )
+        if let T = T.self as? DetailPathRewritable.Type {
+            detailUrl = rewritePath(for: T.self, detailUrl: detailUrl, urlQueryItems: urlQueryItems)
+        }
+        
+        let request = urlRequest(
+            for: detailUrl
         )
-        .map { $0.data }
-        .decode(type: T.self, decoder: JSONDecoder())
-        .map { .loaded($0) }
-        .catch { Just(.error($0)) }
-        .eraseToAnyPublisher()
+        
+        if let nestedDetailKey = T.nestedDetailKey {
+            return URLSession.shared.dataTaskPublisher(
+                for: request
+            )
+            .map { $0.data }
+            .decode(type: [String: T].self, decoder: JSONDecoder())
+            .map { dict in
+                guard let item = dict[nestedDetailKey] else {
+                    return .error(NetworkError.malformedDetailResponse)
+                }
+                return .loaded(item)
+            }
+            .catch { Just(.error($0)) }
+            .eraseToAnyPublisher()
+        } else {
+            return URLSession.shared.dataTaskPublisher(
+                for: request
+            )
+            .map { $0.data }
+            .decode(type: T.self, decoder: JSONDecoder())
+            .map { .loaded($0) }
+            .catch { Just(.error($0)) }
+            .eraseToAnyPublisher()
+        }
+    }
+    
+    private func rewritePath<T: DetailPathRewritable>(
+        for modelType: T.Type,
+        detailUrl: URL,
+        urlQueryItems: [URLQueryItem]?
+    ) -> URL {
+        var detailUrl = detailUrl
+        var urlQueryItems = urlQueryItems
+        
+        var components = detailUrl.pathComponents.filter { $0 != "/" }
+        for rewriteKey in T.pathRewrites {
+            guard var rewriteIndex = components.firstIndex(of: "{\(rewriteKey)}") else {
+                assertionFailure("path rewrite not found in url path")
+                continue
+            }
+            guard let value = urlQueryItems?.first(where: { $0.name == rewriteKey })?.value else {
+                assertionFailure("no key found matching path rewrite")
+                continue
+            }
+            components[rewriteIndex] = value
+            urlQueryItems?.removeAll(where: { $0.name == rewriteKey })
+        }
+        
+        detailUrl = detailUrl.removingAllPathComponents()
+        
+        var path = components.joined(separator: "/")
+        
+        detailUrl = detailUrl.appending(path: path).withTrailingSlash()
+        
+        if let urlQueryItems, !urlQueryItems.isEmpty {
+            return detailUrl.appending(
+                queryItems: urlQueryItems
+            )
+        } else {
+            return detailUrl
+        }
     }
     
     private func urlRequest(for url: URL) -> URLRequest {
@@ -140,4 +201,25 @@ enum NetworkError: Error {
     case detailUrlMissing
     case modelNotFound
     case malformedListResponse
+    case malformedDetailResponse
+}
+
+private extension URL {
+    /// Removes all path components from the URL
+    func removingAllPathComponents() -> URL {
+        var newURL = self
+        while newURL.pathComponents.count > 1 { // To avoid removing the root "/"
+            newURL.deleteLastPathComponent()
+        }
+        return newURL
+    }
+    
+    /// Returns a URL with a trailing slash if it doesn't already have one
+    func withTrailingSlash() -> URL {
+        var urlString = self.absoluteString
+        if !urlString.hasSuffix("/") {
+            urlString.append("/")
+        }
+        return URL(string: urlString) ?? self
+    }
 }

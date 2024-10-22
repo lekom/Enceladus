@@ -7,6 +7,8 @@ public protocol BaseModel: Equatable, Identifiable, Codable, PersistentModel {
     
     var id: String { get }
     
+    static var idKeyPath: KeyPath<Self, String> { get }
+    
     /// The date the model was last fetched from the server.
     var lastCachedDate: Date? { get set }
     
@@ -25,6 +27,8 @@ public protocol BaseModel: Equatable, Identifiable, Codable, PersistentModel {
     static var configuration: ModelConfiguration { get }
     
     static var typeName: String { get }
+    
+    static var nestedDetailKey: String? { get }
 }
 
 public extension BaseModel {
@@ -44,6 +48,10 @@ public extension BaseModel {
     static var configuration: ModelConfiguration {
         ModelConfiguration(typeName)
     }
+    
+    static var nestedDetailKey: String? {
+        nil
+    }
 }
 
 public protocol ListModel: BaseModel {
@@ -54,12 +62,12 @@ public protocol ListModel: BaseModel {
     /// The index of the model in the list.
     var index: Int { get set }
     
-    static var nestedKey: String { get }
+    static var nestedListKey: String { get }
 }
 
 extension ListModel {
     
-    public static var nestedKey: String {
+    public static var nestedListKey: String {
         "results"
     }
 }

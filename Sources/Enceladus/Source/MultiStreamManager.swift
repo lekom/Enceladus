@@ -78,7 +78,7 @@ class MultiStreamManager: MultiStreamManaging {
             type: .detail,
             query: ModelQuery(
                 queryItems: [
-                    EqualQueryItem(\.id, id)
+                    EqualQueryItem(T.idKeyPath, id)
                 ]
             )
         )

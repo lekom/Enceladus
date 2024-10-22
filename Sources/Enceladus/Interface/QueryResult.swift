@@ -7,7 +7,7 @@
 
 import Foundation
 
-public enum ModelQueryResult<M: BaseModel> {
+public enum ModelQueryResult<M: BaseModel>: Equatable {
     
     case loading
     case loaded(M)
@@ -30,9 +30,22 @@ public enum ModelQueryResult<M: BaseModel> {
             return false
         }
     }
+    
+    public static func ==(lhs: Self, rhs: Self) -> Bool {
+        switch (lhs, rhs) {
+        case (.loading, .loading):
+            return true
+        case (.loaded(let lhsModel), .loaded(let rhsModel)):
+            return lhsModel == rhsModel
+        case (.error(let lhsError), .error(let rhsError)):
+            return lhsError.localizedDescription == rhsError.localizedDescription
+        default:
+            return false
+        }
+    }
 }
 
-public enum ListModelQueryResult<M: ListModel> {
+public enum ListModelQueryResult<M: ListModel>: Equatable {
     
     case loading
     case loaded([M])
@@ -65,6 +78,19 @@ public enum ListModelQueryResult<M: ListModel> {
         case .loading:
             return true
         case .loaded, .error:
+            return false
+        }
+    }
+    
+    public static func ==(lhs: Self, rhs: Self) -> Bool {
+        switch (lhs, rhs) {
+        case (.loading, .loading):
+            return true
+        case (.loaded(let lhsModels), .loaded(let rhsModels)):
+            return lhsModels == rhsModels
+        case (.error(let lhsError), .error(let rhsError)):
+            return lhsError.localizedDescription == rhsError.localizedDescription
+        default:
             return false
         }
     }
