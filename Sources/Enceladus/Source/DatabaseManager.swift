@@ -108,21 +108,26 @@ extension DatabaseManaging {
     }
 }
 
+struct DatabaseUpdateModel {
+    let type: any BaseModel.Type
+    let id: String
+}
+
 enum DatabaseUpdate {
     
-    case modelUpdated(any BaseModel)
-    case modelsUpdated([any BaseModel])
-    case modelsDeleted([any BaseModel])
+    case modelUpdated(DatabaseUpdateModel)
+    case modelsUpdated([DatabaseUpdateModel])
+    case modelsDeleted([DatabaseUpdateModel])
     case allModelsDeleted(any BaseModel.Type)
     
     func isRelevant<M: BaseModel>(to modelType: M.Type, id: String? = nil) -> Bool {
         switch self {
         case .modelUpdated(let model):
-            let isSameType = (type(of: model) == modelType)
+            let isSameType = (model.type == modelType)
             return isSameType && (id == nil || id == model.id)
         case .modelsUpdated(let models), .modelsDeleted(let models):
             return models.contains { model in
-                let isSameType = (type(of: model) == modelType)
+                let isSameType = (model.type == modelType)
                 return isSameType && (id == nil || id == model.id)
             }
         case.allModelsDeleted(let typeDeleted):
@@ -132,14 +137,12 @@ enum DatabaseUpdate {
 }
 
 class DatabaseManager: DatabaseManaging {
+    
+    var databaseUpdatePublisher: AnyPublisher<DatabaseUpdate, Never> {
+        database.databaseUpdatePublisher
+    }
         
     private var database: BaseModelActor!
-    
-    private let databaseUpdatePublishSubject = PassthroughSubject<DatabaseUpdate, Never>()
-        
-    var databaseUpdatePublisher: AnyPublisher<DatabaseUpdate, Never> {
-        databaseUpdatePublishSubject.eraseToAnyPublisher()
-    }
     
     func register(modelContainer: ModelContainer) {
         do {
@@ -186,8 +189,6 @@ class DatabaseManager: DatabaseManaging {
         
         Task {
             try await database.save(models)
-            
-            databaseUpdatePublishSubject.send(.modelsUpdated(models))
         }
     }
     
@@ -195,8 +196,6 @@ class DatabaseManager: DatabaseManaging {
                 
         Task {
             try await database.save(model)
-            
-            databaseUpdatePublishSubject.send(.modelUpdated(model))
         }
     }
     
@@ -206,8 +205,6 @@ class DatabaseManager: DatabaseManaging {
              
         Task {
             try await database.delete(models: models)
-            
-            databaseUpdatePublishSubject.send(.modelsDeleted(models))
         }
     }
     
@@ -220,8 +217,6 @@ class DatabaseManager: DatabaseManaging {
             let objectsToDelete = try await database.fetch(T.self, predicate: predicate)
             
             try await database.delete(modelType, where: predicate)
-            
-            databaseUpdatePublishSubject.send(.modelsDeleted(objectsToDelete))
         }
     }
     
@@ -229,8 +224,6 @@ class DatabaseManager: DatabaseManaging {
         
         Task {
             try await database.deleteAll(modelType)
-                        
-            databaseUpdatePublishSubject.send(.allModelsDeleted(T.self))
         }
     }
     
@@ -250,13 +243,25 @@ class DatabaseManager: DatabaseManaging {
 @ModelActor
 actor BaseModelActor {
         
+    private let databaseUpdatePublishSubject = PassthroughSubject<DatabaseUpdate, Never>()
+        
+    nonisolated var databaseUpdatePublisher: AnyPublisher<DatabaseUpdate, Never> {
+        databaseUpdatePublishSubject.eraseToAnyPublisher()
+    }
+    
     func save<T: BaseModel>(_ models: [T]) throws {
         for model in models {
             model.lastCachedDate = .now
             modelContext.insert(model)
         }
                     
+        let update = models.map { DatabaseUpdateModel(type: T.self, id: $0.id) }
+        
         try modelContext.save()
+        
+        databaseUpdatePublishSubject.send(
+            .modelsUpdated(update)
+        )
     }
     
     func save(_ model: any BaseModel) throws {
@@ -265,7 +270,13 @@ actor BaseModelActor {
         
         model.lastCachedDate = .now
         
+        let update = DatabaseUpdateModel(type: type(of: model), id: model.id)
+        
         try modelContext.save()
+        
+        databaseUpdatePublishSubject.send(
+            .modelUpdated(update)
+        )
     }
     
     func delete<T: BaseModel>(
@@ -276,7 +287,15 @@ actor BaseModelActor {
             modelContext.delete(model)
         }
         
+        let update = models.map { DatabaseUpdateModel(type: T.self, id: $0.id) }
+        
         try modelContext.save()
+        
+        databaseUpdatePublishSubject.send(
+            .modelsDeleted(
+                update
+            )
+        )
     }
     
     func delete<T: BaseModel>(
@@ -290,7 +309,15 @@ actor BaseModelActor {
             modelContext.delete(object)
         }
         
+        let update = objectsToDelete.map { DatabaseUpdateModel(type: T.self, id: $0.id) }
+        
         try modelContext.save()
+        
+        databaseUpdatePublishSubject.send(
+            .modelsDeleted(
+                update
+            )
+        )
     }
     
     func deleteAll<T: BaseModel>(_ modelType: T.Type) throws {
@@ -298,6 +325,10 @@ actor BaseModelActor {
         try modelContext.delete(model: T.self)
         
         try modelContext.save()
+        
+        databaseUpdatePublishSubject.send(
+            .allModelsDeleted(T.self)
+        )
     }
     
     func fetch<T: BaseModel>(
