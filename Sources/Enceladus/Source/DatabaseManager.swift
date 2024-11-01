@@ -152,6 +152,13 @@ class DatabaseManager: DatabaseManaging {
         }
     }
     
+    func handleFetchedList<T: ListModel>(_ models: [T], query: ModelQuery<T>?) async throws -> [T] {
+        return try await database.handleFetchedList(
+            models,
+            query: query
+        )
+    }
+    
     func fetch<T: BaseModel>(
         _ modelType: T.Type,
         predicate: Predicate<T>? = nil,
@@ -240,16 +247,26 @@ class DatabaseManager: DatabaseManaging {
     }
 }
 
-@ModelActor
-actor BaseModelActor {
+final actor BaseModelActor {
         
+    nonisolated let modelExecutor: any ModelExecutor
+    nonisolated let modelContainer: ModelContainer
+    
+    private var modelContext: ModelContext { modelExecutor.modelContext }
+    
     private let databaseUpdatePublishSubject = PassthroughSubject<DatabaseUpdate, Never>()
         
     nonisolated var databaseUpdatePublisher: AnyPublisher<DatabaseUpdate, Never> {
         databaseUpdatePublishSubject.eraseToAnyPublisher()
     }
     
+    init(modelContainer: ModelContainer) {
+        self.modelExecutor = DefaultSerialModelExecutor(modelContext: ModelContext(modelContainer))
+        self.modelContainer = modelContainer
+    }
+    
     func save<T: BaseModel>(_ models: [T]) throws {
+        
         for model in models {
             model.lastCachedDate = .now
             modelContext.insert(model)
@@ -282,7 +299,9 @@ actor BaseModelActor {
     func delete<T: BaseModel>(
         models: [T]
     ) throws {
-                
+        
+        guard models.count > 0 else { return }
+        
         for model in models {
             modelContext.delete(model)
         }
@@ -357,5 +376,45 @@ actor BaseModelActor {
         )
         
         return try modelContext.fetch(fetchDescriptor)
+    }
+    
+    func handleFetchedList<T: ListModel>(
+        _ models: [T],
+        query: ModelQuery<T>?
+    ) async throws -> [T] {
+        
+        var modelsToDelete = try await fetch(
+            T.self,
+            predicate: query?.localQuery
+        ).reduce(into: [:]) {
+            $0[$1.id] = $1
+        }
+        
+        for (index, model) in models.enumerated() {
+            model.index = index
+            modelsToDelete.removeValue(forKey: model.id)
+        }
+        
+        try modelContext.transaction {
+            try save(models)
+            
+            let models: [T] = modelsToDelete.values.map { $0 }
+            
+            try delete(models: models)
+        }
+        
+        try await modelContext.save()
+        
+        // TODO: eventually allow sort descriptor to be passed in
+        let cachedModels = try await fetch(
+            T.self,
+            predicate: query?.localQuery,
+            sortedBy: [
+//                    SortDescriptor(\T.index),
+//                    SortDescriptor(\T.id) // use id to break ties
+            ]
+        )
+                
+        return cachedModels
     }
 }

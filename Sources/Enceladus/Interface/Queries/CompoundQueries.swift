@@ -19,6 +19,10 @@ public struct OrQueryItem<T: BaseModel>: QueryItem, QueryItemCombining {
     
     public let queryItems: [any QueryItem<T>]
     
+    public init(queryItems: [any QueryItem<T>]) {
+        self.queryItems = queryItems
+    }
+    
     // Override to use OR instead of default AND
     public var localQuery: Predicate<T> {
         queryItems

@@ -36,7 +36,7 @@ struct ModelProvider: ModelProviding {
         streamManager.streamModel(type: T.self, id: id)
     }
     
-    func streamModel<T: SingletonModel>(modelType: T.Type) -> AnyPublisher<ModelQueryResult<T>, Never> {
+    func streamModel<T: SingletonModel>(_ modelType: T.Type) -> AnyPublisher<ModelQueryResult<T>, Never> {
         streamManager.streamModel(type: T.self)
     }
     
@@ -116,6 +116,25 @@ struct ModelProvider: ModelProviding {
         sortDescriptors: [SortDescriptor<T>]?
     ) async -> Result<[T], Error> {
         await fetchProvider.getList(T.self, query: query, limit: limit, sortDescriptors: sortDescriptors)
+    }
+    
+    func save<T: BaseModel>(_ model: T) {
+        try? databaseManager.save([model])
+    }
+    
+    func delete<T: BaseModel>(_ modelType: T.Type, id: String) {
+        try? databaseManager.delete(
+            modelType,
+            where: Predicate<T> {
+                PredicateExpressions.build_Equal(
+                    lhs: PredicateExpressions.build_KeyPath(
+                        root: PredicateExpressions.build_Arg($0),
+                        keyPath: T.idKeyPath
+                    ),
+                    rhs: PredicateExpressions.build_Arg(id)
+                )
+            }
+        )
     }
     
     func configure(

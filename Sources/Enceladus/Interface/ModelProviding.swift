@@ -23,7 +23,7 @@ public protocol ModelProviding {
     /// - Parameters:
     ///  - modelType: The type of model to fetch
     /// - Returns: A publisher providing the model query result
-    func streamModel<T: SingletonModel>(modelType: T.Type) -> AnyPublisher<ModelQueryResult<T>, Never>
+    func streamModel<T: SingletonModel>(_ modelType: T.Type) -> AnyPublisher<ModelQueryResult<T>, Never>
     
     /// Streams a list of models from the cache or remotely
     /// - Parameters:
@@ -98,6 +98,12 @@ public protocol ModelProviding {
         modelContainer: ModelContainer,
         headersProvider: (() -> [String: String])?
     )
+    
+    /// save a model in persistent storage
+    func save<T: BaseModel>(_ model: T)
+    
+    /// delete a model from persistent storage
+    func delete<T: BaseModel>(_ modelType: T.Type, id: String)
 }
 
 // MARK: - Defaults

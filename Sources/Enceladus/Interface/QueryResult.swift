@@ -94,4 +94,15 @@ public enum ListModelQueryResult<M: ListModel>: Equatable {
             return false
         }
     }
+    
+    public func mapLoaded(_ transform: ([M]) -> [M]) -> ListModelQueryResult<M> {
+        switch self {
+        case .loading:
+            return .loading
+        case .loaded(let models):
+            return .loaded(transform(models))
+        case .error(let error):
+            return .error(error)
+        }
+    }
 }

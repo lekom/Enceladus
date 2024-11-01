@@ -164,7 +164,7 @@ struct ModelFetchProvider: ModelFetchProviding {
         func streamFirst<G: ListModel>(type: G.Type) -> AnyPublisher<ModelQueryResult<T>, Never> {
             streamList(
                 G.self,
-                query: .equals(\.id, id),
+                query: .equals(G.idKeyPath, id),
                 sortDescriptors: nil
             )
             .filter { !$0.isLoading }
@@ -385,33 +385,7 @@ struct ModelFetchProvider: ModelFetchProviding {
     @discardableResult
     private func handleFetchedList<T: ListModel>(_ models: [T], query: ModelQuery<T>?) async -> Result<[T], Error> {
         do {
-            var modelsToDelete = try await databaseManager.fetch(
-                T.self,
-                predicate: query?.localQuery
-            ).reduce(into: [:]) {
-                $0[$1.id] = $1
-            }
-            
-            for (index, model) in models.enumerated() {
-                model.index = index
-                modelsToDelete.removeValue(forKey: model.id)
-            }
-            
-            try databaseManager.save(models)
-            
-            let models: [T] = modelsToDelete.values.map { $0 }
-            
-            try databaseManager.delete(models: models)
-            
-            // TODO: eventually allow sort descriptor to be passed in
-            let cachedModels = try await databaseManager.fetch(
-                T.self,
-                predicate: query?.localQuery,
-                sortedBy: [
-//                    SortDescriptor(\T.index),
-//                    SortDescriptor(\T.id) // use id to break ties
-                ]
-            )
+            let cachedModels = try await databaseManager.handleFetchedList(models, query: query)
                         
             return .success(cachedModels)
         } catch {
