@@ -41,6 +41,9 @@ class MultiStreamManager: MultiStreamManaging {
     // MARK: - MultiStreamManaging
     
     func streamModel<T: SingletonModel>(type: T.Type) -> AnyPublisher<ModelQueryResult<T>, Never> {
+        
+        assert(Thread.isMainThread)
+        
         let key = StreamKey<T>(
             model: ModelWrapper(type),
             type: .detail,
@@ -73,6 +76,9 @@ class MultiStreamManager: MultiStreamManaging {
     }
     
     func streamModel<T: BaseModel>(type: T.Type, id: String) -> AnyPublisher<ModelQueryResult<T>, Never> {
+        
+        assert(Thread.isMainThread)
+        
         let key = StreamKey<T>(
             model: ModelWrapper(type),
             type: .detail,

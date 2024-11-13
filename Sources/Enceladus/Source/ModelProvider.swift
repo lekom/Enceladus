@@ -137,6 +137,14 @@ struct ModelProvider: ModelProviding {
         )
     }
     
+    func deleteAll<T>(_ modelType: T.Type) where T : BaseModel {
+        try? databaseManager.deleteAll(modelType)
+    }
+    
+    func resetLocalData() {
+        try? databaseManager.reset()
+    }
+    
     func configure(
         modelContainer: ModelContainer,
         headersProvider: (() -> [String : String])?

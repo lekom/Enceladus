@@ -104,13 +104,18 @@ public protocol ModelProviding {
     
     /// delete a model from persistent storage
     func delete<T: BaseModel>(_ modelType: T.Type, id: String)
+    
+    /// delete all instances of the given model type from the persistent storage
+    func deleteAll<T: BaseModel>(_ modelType: T.Type)
+    
+    func resetLocalData()
 }
 
 // MARK: - Defaults
 
 extension ModelProviding {
     
-    func streamListModel<T: ListModel>(
+    public func streamListModel<T: ListModel>(
         _ modelType: T.Type,
         query: ModelQuery<T>? = nil,
         limit: Int? = nil,
@@ -119,7 +124,7 @@ extension ModelProviding {
         streamListModel(modelType, query: query, limit: limit, sortDescriptors: sortDescriptors)
     }
     
-    func streamFirstModel<T: ListModel>(
+    public func streamFirstModel<T: ListModel>(
         _ modelType: T.Type,
         query: ModelQuery<T>? = nil,
         sortDescriptors: [SortDescriptor<T>]? = nil
@@ -127,7 +132,7 @@ extension ModelProviding {
         streamFirstModel(modelType, query: query, sortDescriptors: sortDescriptors)
     }
     
-    func getList<T: ListModel>(
+    public func getList<T: ListModel>(
         _ modelType: T.Type,
         query: ModelQuery<T>? = nil,
         limit: Int? = nil,
@@ -136,7 +141,7 @@ extension ModelProviding {
         await getList(modelType, query: query, limit: limit, sortDescriptors: sortDescriptors)
     }
     
-    func getFirstModel<T: ListModel>(
+    public func getFirstModel<T: ListModel>(
         _ modelType: T.Type,
         query: ModelQuery<T>? = nil,
         sortDescriptors: [SortDescriptor<T>]? = nil

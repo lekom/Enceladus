@@ -136,16 +136,18 @@ struct ModelFetchProvider: ModelFetchProviding {
                     })
                     .flatMap { result in
                         databaseUpdates.flatMap { _ in
-                            let subject = PassthroughSubject<ModelQueryResult<T>, Never>()
-
-                            Task {
-                                if let loaded = try? await fetchCachedModels(T.self)?.first {
-                                    subject.send(.loaded(loaded))
+                            cachedModelsPublisher(
+                                T.self
+                            )
+                            .map { values -> ModelQueryResult<T> in
+                                if let first = values.first {
+                                    return .loaded(first)
+                                } else {
+                                    return .error(NetworkError.modelNotFound)
                                 }
                             }
-                            
-                            return subject.eraseToAnyPublisher()
                         }
+                        .eraseToAnyPublisher()
                     }
                     .eraseToAnyPublisher()
                 
@@ -233,14 +235,19 @@ struct ModelFetchProvider: ModelFetchProviding {
                     })
                     .flatMap { result in
                         databaseUpdates.flatMap { _ in
-                            let publisher = PassthroughSubject<ModelQueryResult<T>, Never>()
-                            Task {
-                                if let loaded = try await fetchCachedModels(T.self, predicate: idQuery(id))?.first {
-                                    publisher.send(.loaded(loaded))
+                            cachedModelsPublisher(
+                                T.self,
+                                predicate: idQuery(id)
+                            )
+                            .map { values -> ModelQueryResult<T> in
+                                if let first = values.first {
+                                    return .loaded(first)
+                                } else {
+                                    return .error(NetworkError.modelNotFound)
                                 }
                             }
-                            return publisher.eraseToAnyPublisher()
                         }
+                        .eraseToAnyPublisher()
                     }
                 
                 if isFirst, let cachedModel {
@@ -321,19 +328,17 @@ struct ModelFetchProvider: ModelFetchProviding {
         predicate: Predicate<T>? = nil,
         sortedBy sortDescriptor: [SortDescriptor<T>]? = nil
     ) -> AnyPublisher<[T], Never> {
-        let publisher = PassthroughSubject<[T], Never>()
-        
-        Task {
-            let cachedModels = await fetchCachedModels(
-                T.self,
-                predicate: predicate,
-                sortedBy: sortDescriptor
-            )
-            
-            publisher.send(cachedModels ?? [])
+        Future { promise in
+            Task {
+                let cachedModels = await fetchCachedModels(
+                    T.self,
+                    predicate: predicate,
+                    sortedBy: sortDescriptor
+                )
+                promise(.success(cachedModels ?? []))
+            }
         }
-        
-        return publisher.eraseToAnyPublisher()
+        .eraseToAnyPublisher()
     }
     
     private func timeTrigger<T: BaseModel>(for type: T.Type) -> AnyPublisher<Date, Never> {

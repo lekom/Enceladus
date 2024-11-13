@@ -45,6 +45,9 @@ protocol DatabaseManaging {
     
     func deleteAll<T: BaseModel>(_ modelType: T.Type) throws
     
+    /// removes all persisted data from the table
+    func reset()
+    
     var databaseUpdatePublisher: AnyPublisher<DatabaseUpdate, Never> { get }
 }
 
@@ -63,17 +66,18 @@ extension DatabaseManaging {
         predicate: Predicate<T>?,
         sortedBy sortDescriptor: [SortDescriptor<T>]?
     ) -> AnyPublisher<[T], Never> {
-        let subject = PassthroughSubject<[T], Never>()
-        Task {
-            do {
-                let result = try await fetch(modelType, predicate: predicate, sortedBy: sortDescriptor)
-                subject.send(result)
-            } catch {
-                subject.send([])
-                assertionFailure("Failed to fetch models: \(error)")
+        Future { promise in
+            Task {
+                do {
+                    let result = try await fetch(modelType, predicate: predicate, sortedBy: sortDescriptor)
+                    promise(.success(result))
+                } catch {
+                    promise(.success([])) // Return an empty array on failure
+                    assertionFailure("Failed to fetch models: \(error)")
+                }
             }
         }
-        return subject.eraseToAnyPublisher()
+        .eraseToAnyPublisher()
     }
     
     func fetch<T: BaseModel>(
@@ -87,17 +91,18 @@ extension DatabaseManaging {
         predicate: Predicate<T>?,
         sortedBy sortDescriptor: [SortDescriptor<T>]?
     ) -> AnyPublisher<[T], Never> {
-        let subject = PassthroughSubject<[T], Never>()
-        Task {
-            do {
-                let result = try await fetch(modelType, predicate: predicate, sortedBy: sortDescriptor)
-                subject.send(result)
-            } catch {
-                subject.send([])
-                assertionFailure("Failed to fetch models: \(error)")
+        Future { promise in
+            Task {
+                do {
+                    let result = try await fetch(modelType, predicate: predicate, sortedBy: sortDescriptor)
+                    promise(.success(result))
+                } catch {
+                    promise(.success([])) // Provide an empty array on failure
+                    assertionFailure("Failed to fetch models: \(error)")
+                }
             }
         }
-        return subject.eraseToAnyPublisher()
+        .eraseToAnyPublisher()
     }
     
     func delete<T: BaseModel>(_ model: T) throws {
@@ -234,6 +239,12 @@ class DatabaseManager: DatabaseManaging {
         }
     }
     
+    func reset() {
+        Task {
+            await database.reset()
+        }
+    }
+    
     // MARK: - Initialization of model containers (only done once at app launch)
     
     @discardableResult
@@ -348,6 +359,10 @@ final actor BaseModelActor {
         databaseUpdatePublishSubject.send(
             .allModelsDeleted(T.self)
         )
+    }
+    
+    func reset() {
+        modelContext.container.deleteAllData()
     }
     
     func fetch<T: BaseModel>(
