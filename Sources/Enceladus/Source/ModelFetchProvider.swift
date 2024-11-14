@@ -65,27 +65,29 @@ struct ModelFetchProvider: ModelFetchProviding {
                             case .loaded(let models):
                                 await handleFetchedList(models, query: query)
                             case .error(let error):
-                                assertionFailure(error.localizedDescription)
+                                // TODO: Log Error
+                                #if DEBUG
+                                print("Network error: \(error.localizedDescription)")
+                                #endif
+                                break
                             case .loading:
                                 assertionFailure("should not be loading")
                             }
                         }
                     })
-                    .flatMap { _ in
-                        databaseUpdates.flatMap { _ in
-                            let subject = PassthroughSubject<ListModelQueryResult<T>, Never>()
-                            Task {
-                                if let loaded = try await fetchCachedModels(
-                                    T.self,
-                                    predicate: query?.localQuery,
-                                    sortedBy: sortDescriptors
-                                ) {
-                                    subject.send(.loaded(loaded))
-                                } else {
-                                    subject.send(.loaded([]))
-                                }
-                            }
-                            return subject.eraseToAnyPublisher()
+                    .flatMap { result in
+                        guard case .loaded = result else {
+                            return Just(result).eraseToAnyPublisher()
+                        }
+                        
+                        return databaseUpdates.flatMap { _ in
+                            cachedModelsPublisher(
+                                T.self,
+                                predicate: query?.localQuery,
+                                sortedBy: sortDescriptors
+                            )
+                            .map { .loaded($0) }
+                            .eraseToAnyPublisher()
                         }
                         .debounce(for: 0.05, scheduler: DispatchQueue.main)
                         .eraseToAnyPublisher()
@@ -121,7 +123,7 @@ struct ModelFetchProvider: ModelFetchProviding {
                             case .loaded(let model):
                                 await handleFetchedSingletonModel(model)
                             case .error(let error):
-                                switch error as? NetworkError {
+                                switch error as? EnceladusNetworkError {
                                 case .modelNotFound:
                                     try? databaseManager.deleteAll(
                                         T.self
@@ -135,7 +137,11 @@ struct ModelFetchProvider: ModelFetchProviding {
                         }
                     })
                     .flatMap { result in
-                        databaseUpdates.flatMap { _ in
+                        guard case .loaded = result else {
+                            return Just(result).eraseToAnyPublisher()
+                        }
+                        
+                        return databaseUpdates.flatMap { _ in
                             cachedModelsPublisher(
                                 T.self
                             )
@@ -143,7 +149,7 @@ struct ModelFetchProvider: ModelFetchProviding {
                                 if let first = values.first {
                                     return .loaded(first)
                                 } else {
-                                    return .error(NetworkError.modelNotFound)
+                                    return .error(EnceladusNetworkError.modelNotFound)
                                 }
                             }
                         }
@@ -176,7 +182,7 @@ struct ModelFetchProvider: ModelFetchProviding {
                     if let loaded = models.first as? T {
                         return .loaded(loaded)
                     } else {
-                        return .error(NetworkError.modelNotFound)
+                        return .error(EnceladusNetworkError.modelNotFound)
                     }
                 case .error(let error):
                     return .error(error)
@@ -193,7 +199,7 @@ struct ModelFetchProvider: ModelFetchProviding {
                 return streamFirst(type: P.self)
             } else {
                 return Just(
-                    .error(NetworkError.detailUrlMissing)
+                    .error(EnceladusNetworkError.detailUrlMissing)
                 )
                 .eraseToAnyPublisher()
             }
@@ -219,7 +225,7 @@ struct ModelFetchProvider: ModelFetchProviding {
                             case .loaded(let model):
                                 await handleFetchedModel(model)
                             case .error(let error):
-                                switch error as? NetworkError {
+                                switch error as? EnceladusNetworkError {
                                 case .modelNotFound:
                                     try? databaseManager.delete(
                                         T.self,
@@ -234,7 +240,11 @@ struct ModelFetchProvider: ModelFetchProviding {
                         }
                     })
                     .flatMap { result in
-                        databaseUpdates.flatMap { _ in
+                        guard case .loaded = result else {
+                            return Just(result).eraseToAnyPublisher()
+                        }
+                        
+                        return databaseUpdates.flatMap { _ in
                             cachedModelsPublisher(
                                 T.self,
                                 predicate: idQuery(id)
@@ -243,7 +253,7 @@ struct ModelFetchProvider: ModelFetchProviding {
                                 if let first = values.first {
                                     return .loaded(first)
                                 } else {
-                                    return .error(NetworkError.modelNotFound)
+                                    return .error(EnceladusNetworkError.modelNotFound)
                                 }
                             }
                         }
@@ -361,7 +371,7 @@ struct ModelFetchProvider: ModelFetchProviding {
             if let first = cachedModels.first {
                 return .success(first)
             } else {
-                return .failure(NetworkError.modelNotFound)
+                return .failure(EnceladusNetworkError.modelNotFound)
             }
         } catch {
             return .failure(error)
@@ -380,7 +390,7 @@ struct ModelFetchProvider: ModelFetchProviding {
             if let first = cachedModels.first {
                 return .success(first)
             } else {
-                return .failure(NetworkError.modelNotFound)
+                return .failure(EnceladusNetworkError.modelNotFound)
             }
         } catch {
             return .failure(error)

@@ -38,10 +38,28 @@ class NetworkManager: NetworkManaging {
         let request = urlRequest(for: T.list.url.appending(queryItems: query?.remoteQuery ?? []))
         
         do {
-            let (data, _) = try await URLSession.shared.data(
+            let (data, response) = try await URLSession.shared.data(
                 for: request
             )
-            return .success(try JSONDecoder().decode([T].self, from: data))
+            
+            if let httpResponse = response as? HTTPURLResponse {
+                switch httpResponse.statusCode {
+                case 200..<400:
+                    let itemsMap = try JSONDecoder().decode([String: [T]].self, from: data)
+                    guard let items = itemsMap[T.nestedListKey] else {
+                        return .failure(EnceladusNetworkError.malformedListResponse)
+                    }
+                    return .success(items)
+                case 401:
+                    return .failure(EnceladusNetworkError.unauthorized)
+                default:
+                    // TODO: forward error from backend response
+                    return .failure(EnceladusNetworkError.genericError(details: "Something went wrong"))
+                }
+            } else {
+                return .failure(EnceladusNetworkError.genericError(details: "Unknown response type"))
+            }
+            
         } catch {
             return .failure(error)
         }
@@ -64,13 +82,23 @@ class NetworkManager: NetworkManaging {
                 )
             )
         )
-        .map {
-            $0.data
+        .tryMap { output in
+            if let httpResponse = output.response as? HTTPURLResponse {
+                switch httpResponse.statusCode {
+                case 200..<400:
+                    break
+                case 401:
+                    throw EnceladusNetworkError.unauthorized
+                default:
+                    throw EnceladusNetworkError.genericError(details: "Something went wrong")
+                }
+            }
+            return output.data
         }
         .decode(type: [String: [T]].self, decoder: JSONDecoder())
         .map { itemsMap in
             guard let items = itemsMap[T.nestedListKey] else {
-                return .error(NetworkError.malformedListResponse)
+                return .error(EnceladusNetworkError.malformedListResponse)
             }
             return .loaded(items)
         }
@@ -87,7 +115,7 @@ class NetworkManager: NetworkManaging {
     private func fetchModelDetail<T: BaseModel>(_ model: T.Type, urlQueryItems: [URLQueryItem]?) async -> Result<T, Error> {
         
         guard var detailUrl = T.detail?.url else {
-            return .failure(NetworkError.detailUrlMissing)
+            return .failure(EnceladusNetworkError.detailUrlMissing)
         }
         
         if let T = T.self as? DetailPathRewritable.Type {
@@ -95,14 +123,27 @@ class NetworkManager: NetworkManaging {
         }
         
         do {
-            let (data, _) = try await URLSession.shared.data(
+            let (data, response) = try await URLSession.shared.data(
                 for: urlRequest(
                     for: detailUrl.appending(
                         queryItems: urlQueryItems ?? []
                     )
                 )
             )
-            return .success(try JSONDecoder().decode(T.self, from: data))
+            
+            if let httpResponse = response as? HTTPURLResponse {
+                switch httpResponse.statusCode {
+                case 200..<400:
+                    return .success(try JSONDecoder().decode(T.self, from: data))
+                case 401:
+                    return .failure(EnceladusNetworkError.unauthorized)
+                default:
+                    // TODO: forward error from backend response
+                    return .failure(EnceladusNetworkError.genericError(details: "Something went wrong"))
+                }
+            } else {
+                return .failure(EnceladusNetworkError.genericError(details: "Unknown response type"))
+            }
         } catch {
             return .failure(error)
         }
@@ -114,7 +155,7 @@ class NetworkManager: NetworkManaging {
     ) -> AnyPublisher<ModelQueryResult<T>, Never> {
         
         guard var detailUrl = T.detail?.url else {
-            return Just(.error(NetworkError.detailUrlMissing)).eraseToAnyPublisher()
+            return Just(.error(EnceladusNetworkError.detailUrlMissing)).eraseToAnyPublisher()
         }
         
         if let T = T.self as? DetailPathRewritable.Type {
@@ -129,11 +170,23 @@ class NetworkManager: NetworkManaging {
             return URLSession.shared.dataTaskPublisher(
                 for: request
             )
-            .map { $0.data }
+            .tryMap { output in
+                if let httpResponse = output.response as? HTTPURLResponse {
+                    switch httpResponse.statusCode {
+                    case 200..<400:
+                        break
+                    case 401:
+                        throw EnceladusNetworkError.unauthorized
+                    default:
+                        throw EnceladusNetworkError.genericError(details: "Something went wrong")
+                    }
+                }
+                return output.data
+            }
             .decode(type: [String: T].self, decoder: JSONDecoder())
             .map { dict in
                 guard let item = dict[nestedDetailKey] else {
-                    return .error(NetworkError.malformedDetailResponse)
+                    return .error(EnceladusNetworkError.malformedDetailResponse)
                 }
                 return .loaded(item)
             }
@@ -143,7 +196,19 @@ class NetworkManager: NetworkManaging {
             return URLSession.shared.dataTaskPublisher(
                 for: request
             )
-            .map { $0.data }
+            .tryMap { output in
+                if let httpResponse = output.response as? HTTPURLResponse {
+                    switch httpResponse.statusCode {
+                    case 200..<400:
+                        break
+                    case 401:
+                        throw EnceladusNetworkError.unauthorized
+                    default:
+                        throw EnceladusNetworkError.genericError(details: "Something went wrong")
+                    }
+                }
+                return output.data
+            }
             .decode(type: T.self, decoder: JSONDecoder())
             .map { .loaded($0) }
             .catch { Just(.error($0)) }
@@ -195,13 +260,6 @@ class NetworkManager: NetworkManaging {
         }
         return request
     }
-}
-
-enum NetworkError: Error {
-    case detailUrlMissing
-    case modelNotFound
-    case malformedListResponse
-    case malformedDetailResponse
 }
 
 private extension URL {

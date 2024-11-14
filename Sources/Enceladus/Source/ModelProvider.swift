@@ -52,7 +52,7 @@ struct ModelProvider: ModelProviding {
                     if let first = models.first {
                         return .loaded(first)
                     } else {
-                        return .error(NetworkError.modelNotFound)
+                        return .error(EnceladusNetworkError.modelNotFound)
                     }
                 case .loading:
                     return .loading
@@ -102,7 +102,7 @@ struct ModelProvider: ModelProviding {
             if let first = models.first {
                 return .success(first)
             } else {
-                return .failure(NetworkError.modelNotFound)
+                return .failure(EnceladusNetworkError.modelNotFound)
             }
         case .failure(let error):
             return .failure(error)

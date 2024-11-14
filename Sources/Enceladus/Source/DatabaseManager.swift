@@ -135,7 +135,7 @@ enum DatabaseUpdate {
                 let isSameType = (model.type == modelType)
                 return isSameType && (id == nil || id == model.id)
             }
-        case.allModelsDeleted(let typeDeleted):
+        case .allModelsDeleted(let typeDeleted):
             return typeDeleted == modelType
         }
     }
