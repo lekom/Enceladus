@@ -159,6 +159,7 @@ class MultiStreamManager: MultiStreamManaging {
     private func startPollingModelDetail<T: SingletonModel>(type: T.Type, key: StreamKey<T>) {
                 
         cancellables[key] = fetchProvider.streamModel(T.self)
+            .receive(on: queue)
             .sink(
                 receiveValue: { [weak self] model in
                     self?.subjects[key]?.send(model)
@@ -169,6 +170,7 @@ class MultiStreamManager: MultiStreamManaging {
     private func startPollingModelDetail<T: BaseModel>(type: T.Type, id: String, key: StreamKey<T>) {
                 
         cancellables[key] = fetchProvider.streamModel(T.self, id: id)
+            .receive(on: queue)
             .sink(
                 receiveValue: { [weak self] model in
                     self?.subjects[key]?.send(model)
@@ -183,6 +185,7 @@ class MultiStreamManager: MultiStreamManaging {
             query: key.query,
             sortDescriptors: key.sortDescriptors
         )
+        .receive(on: queue)
         .sink(
             receiveValue: { [weak self] models in
                 self?.subjects[key]?.send(models.loadedPrefix(key.limit))

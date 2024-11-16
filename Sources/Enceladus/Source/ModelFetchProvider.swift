@@ -338,15 +338,13 @@ struct ModelFetchProvider: ModelFetchProviding {
         predicate: Predicate<T>? = nil,
         sortedBy sortDescriptor: [SortDescriptor<T>]? = nil
     ) -> AnyPublisher<[T], Never> {
-        Future { promise in
-            Task {
-                let cachedModels = await fetchCachedModels(
-                    T.self,
-                    predicate: predicate,
-                    sortedBy: sortDescriptor
-                )
-                promise(.success(cachedModels ?? []))
-            }
+        AsyncAwaitFuture<[T], Never> { promise in
+            let cachedModels = await fetchCachedModels(
+                T.self,
+                predicate: predicate,
+                sortedBy: sortDescriptor
+            )
+            promise(.success(cachedModels ?? []))
         }
         .eraseToAnyPublisher()
     }

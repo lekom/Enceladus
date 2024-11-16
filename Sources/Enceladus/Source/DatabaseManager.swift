@@ -66,15 +66,13 @@ extension DatabaseManaging {
         predicate: Predicate<T>?,
         sortedBy sortDescriptor: [SortDescriptor<T>]?
     ) -> AnyPublisher<[T], Never> {
-        Future { promise in
-            Task {
-                do {
-                    let result = try await fetch(modelType, predicate: predicate, sortedBy: sortDescriptor)
-                    promise(.success(result))
-                } catch {
-                    promise(.success([])) // Return an empty array on failure
-                    assertionFailure("Failed to fetch models: \(error)")
-                }
+        AsyncAwaitFuture<[T], Never> { promise in
+            do {
+                let result = try await fetch(modelType, predicate: predicate, sortedBy: sortDescriptor)
+                promise(.success(result))
+            } catch {
+                promise(.success([])) // Return an empty array on failure
+                assertionFailure("Failed to fetch models: \(error)")
             }
         }
         .eraseToAnyPublisher()
@@ -91,15 +89,13 @@ extension DatabaseManaging {
         predicate: Predicate<T>?,
         sortedBy sortDescriptor: [SortDescriptor<T>]?
     ) -> AnyPublisher<[T], Never> {
-        Future { promise in
-            Task {
-                do {
-                    let result = try await fetch(modelType, predicate: predicate, sortedBy: sortDescriptor)
-                    promise(.success(result))
-                } catch {
-                    promise(.success([])) // Provide an empty array on failure
-                    assertionFailure("Failed to fetch models: \(error)")
-                }
+        AsyncAwaitFuture<[T], Never> { promise in
+            do {
+                let result = try await fetch(modelType, predicate: predicate, sortedBy: sortDescriptor)
+                promise(.success(result))
+            } catch {
+                promise(.success([])) // Provide an empty array on failure
+                assertionFailure("Failed to fetch models: \(error)")
             }
         }
         .eraseToAnyPublisher()
