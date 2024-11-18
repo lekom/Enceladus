@@ -211,7 +211,7 @@ class MultiStreamManager: MultiStreamManaging {
                     print("[encel] canceled \(T.typeName)")
                     
                     guard let self = self else { return }
-                    queue.sync {
+                    queue.async {
                         assert((self.subscriberCounts[key] ?? 0) > 0, "should not get cancel if no subscribers")
                         self.subscriberCounts[key] = (self.subscriberCounts[key] ?? 0) - 1
                         

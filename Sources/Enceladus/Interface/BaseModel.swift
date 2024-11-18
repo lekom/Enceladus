@@ -70,6 +70,10 @@ extension ListModel {
     public static var nestedListKey: String {
         "results"
     }
+    
+    public static var detail: Endpoint? {
+        nil
+    }
 }
 
 /// Models that should only have one instance in the cache.  Detail API does not require an id.
