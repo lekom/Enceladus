@@ -238,8 +238,8 @@ class MultiStreamManager: MultiStreamManaging {
     }
     
     private func setSubject(_ subject: CurrentValueSubject<Any, Never>, for key: AnyHashable) {
-        queue.sync {
-            subjects[key] = subject
+        queue.async { [weak self] in
+            self?.subjects[key] = subject
         }
     }
     
@@ -252,8 +252,8 @@ class MultiStreamManager: MultiStreamManaging {
     }
     
     private func setCancellable(_ cancellable: AnyCancellable, for key: AnyHashable) {
-        queue.sync {
-            cancellables[key] = cancellable
+        queue.async { [weak self] in
+            self?.cancellables[key] = cancellable
         }
     }
     
@@ -266,18 +266,18 @@ class MultiStreamManager: MultiStreamManaging {
     }
     
     private func incrementSubscriberCount(for key: AnyHashable) {
-        queue.sync {
-            subscriberCounts[key, default: 0] += 1
+        queue.async { [weak self] in
+            self?.subscriberCounts[key, default: 0] += 1
         }
     }
     
     private func decrementSubscriberCount(for key: AnyHashable) {
-        queue.sync {
-            guard let count = subscriberCounts[key], count > 0 else {
+        queue.async { [weak self] in
+            guard let count = self?.subscriberCounts[key], count > 0 else {
                 assertionFailure("Subscriber count should not be zero or nil")
                 return
             }
-            subscriberCounts[key] = count - 1
+            self?.subscriberCounts[key] = count - 1
         }
     }
     
